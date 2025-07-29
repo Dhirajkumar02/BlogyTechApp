@@ -9,6 +9,7 @@ dotenv.config();
 //?Setup the Router
 app.use("/", usersRouter);
 const PORT = process.env.PORT || 9080;
+
 app.listen(PORT, () => {
     console.log(`Server started at ${PORT}`);
 });
