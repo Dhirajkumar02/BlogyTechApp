@@ -1,10 +1,11 @@
 const bcrypt = require("bcryptjs");
 const User = require("../../models/Users/User");
 const generateToken = require("../../utils/generateToken");
+
 //@desc Register new user
 //@route POST /api/v1/users/register
 //@access public
-exports.register = async (req, resp) => {
+exports.register = async (req, resp, next) => {
     try {
         const { username, password, email } = req.body;
         const user = await User.findOne({ username });
@@ -24,14 +25,14 @@ exports.register = async (req, resp) => {
             role: newUser?.role,
         });
     } catch (error) {
-        resp.json({ status: "Failed", message: error?.message });
+        next(error); // Goto Global Error Handler
     }
 };
-// New User login
-//@desc Register new user
-//@route POST /api/v1/users/register
+
+//@desc Login user
+//@route POST /api/v1/users/login
 //@access public
-exports.login = async (req, resp) => {
+exports.login = async (req, resp, next) => {
     try {
         const { username, password } = req.body;
         const user = await User.findOne({ username });
@@ -46,17 +47,20 @@ exports.login = async (req, resp) => {
         await user.save();
         resp.json({ status: "success", email: user?.email, _id: user?._id, username: user?.username, role: user?.role, token: generateToken(user), });
     } catch (error) {
-        resp.json({ status: "failed", message: error?.message });
+        next(error);// Goto Global Error Handler
     }
 };
 
 //@desc Profile view
 //@route GET /api/v1/users/profile/:id
 //@access private
-exports.getProfile = async (req, resp) => {
+exports.getProfile = async (req, resp, next) => {
+    console.log("Rec:", req.userAuth);
+
     try {
-        resp.json({ status: "success", message: "Profile fetched", data: "dummy user" });
+        const user = await User.findById(req.userAuth.id);
+        resp.json({ status: "success", message: "Profile fetched", user });
     } catch (error) {
-        resp.json({ status: "error", message: error?.message, });
+        next(error);// Goto Global Error Handler
     }
 }

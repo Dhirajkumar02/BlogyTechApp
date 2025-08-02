@@ -12,7 +12,13 @@ connectDB();
 //! Setup the middleware
 app.use(express.json());
 //?Setup the Router
-app.use("/", usersRouter);
+app.use("/api/v1/users/", usersRouter);
+//? Setup the Global Error Handler
+app.use((error, req, resp, next) => {
+    const status = error?.status ? error.status : "failed";
+    resp.status(500).json({ status: "failed", message: error?.message });
+
+});
 const PORT = process.env.PORT || 9080;
 
 app.listen(PORT, () => {
