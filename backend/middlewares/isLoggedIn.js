@@ -4,6 +4,7 @@ const User = require("../models/Users/User");
 const isLoggedIn = (req, res, next) => {
     console.log("isLogged executed");
 
+    //Fetch token from request
     const authHeader = req.headers.authorization;
     if (!authHeader || !authHeader.startsWith("Bearer ")) {
         return res.status(401).json({ status: "Failed", message: "No token provided" });
@@ -12,10 +13,13 @@ const isLoggedIn = (req, res, next) => {
     const token = authHeader.split(" ")[1];
 
     jwt.verify(token, process.env.JWT_SECRET, async (err, decoded) => {
+        //If unsuccessful then send the error message
         if (err) {
-            return res.status(401).json({ status: "Failed", message: err.message });
+            const error = new Error(err?.message);
+            next(err);
         }
 
+        //If successful, then pass the user object to next path
         const userId = decoded?.id;
         const user = await User.findById(userId).select("username email role _id");
         if (!user) {
