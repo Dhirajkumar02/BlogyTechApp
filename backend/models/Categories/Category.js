@@ -24,5 +24,5 @@ const categorySchema = new mongoose.Schema({
 );
 //!Convert schema to model
 
-const Category = mongoose.model("User", categorySchema);
+const Category = mongoose.model("Category", categorySchema);
 module.exports = Category;

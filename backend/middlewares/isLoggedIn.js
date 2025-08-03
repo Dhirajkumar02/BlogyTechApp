@@ -1,21 +1,30 @@
 const jwt = require("jsonwebtoken");
-const User = require("../models/Users/User")
-const isLoggedIn = (req, resp, next) => {
+const User = require("../models/Users/User");
+
+const isLoggedIn = (req, res, next) => {
     console.log("isLogged executed");
-    //Fetch token from request
-    const token = req.headers.authorization?.split(" ")[1];
-    //Verify token
-    jwt.verify(token, "secretkey", async (err, decoded) => {
-        //If unsuccessful then send the error message
+
+    const authHeader = req.headers.authorization;
+    if (!authHeader || !authHeader.startsWith("Bearer ")) {
+        return res.status(401).json({ status: "Failed", message: "No token provided" });
+    }
+
+    const token = authHeader.split(" ")[1];
+
+    jwt.verify(token, process.env.JWT_SECRET, async (err, decoded) => {
         if (err) {
-            return resp.status(401).json({ status: "Failed", message: err?.message });
-        } else {
-            //If successful, then pass the user object to next path
-            const userId = decoded?.user?.id;
-            const user = await User.findById(userId).select("username email role _id");
-            req.userAuth = user;
-            next();
+            return res.status(401).json({ status: "Failed", message: err.message });
         }
+
+        const userId = decoded?.id;
+        const user = await User.findById(userId).select("username email role _id");
+        if (!user) {
+            return res.status(401).json({ status: "Failed", message: "User not found" });
+        }
+
+        req.userAuth = user;
+        next();
     });
 };
+
 module.exports = isLoggedIn;

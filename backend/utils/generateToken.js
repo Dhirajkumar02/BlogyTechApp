@@ -1,11 +1,15 @@
 const jwt = require("jsonwebtoken");
+
 const generateToken = (user) => {
     const payLoad = {
-        user: {
-            id: user._id,
-        },
+        id: user._id, // ✅ flatten the payload — no need to nest under `user`
     };
-    const token = jwt.sign(payLoad, "secretkey", { expiresIn: 3600 });
+
+    const token = jwt.sign(payLoad, process.env.JWT_SECRET, {
+        expiresIn: "1h", // ✅ More readable than 3600
+    });
+
     return token;
 };
+
 module.exports = generateToken;
