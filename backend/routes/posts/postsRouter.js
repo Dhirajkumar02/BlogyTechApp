@@ -2,7 +2,9 @@ const express = require("express");
 const {
     createPost,
     getAllPosts,
-    getSinglePost
+    getSinglePost,
+    deletePost,
+    updatePost
 } = require("../../controllers/posts/postsController");
 const isLoggedIn = require("../../middlewares/isLoggedIn");
 
@@ -16,5 +18,11 @@ postsRouter.get("/", getAllPosts);
 
 //! Fetch Single Post Router
 postsRouter.get("/:id", getSinglePost);
+
+//! Delete Post Router
+postsRouter.delete("/:id", isLoggedIn, deletePost);
+
+//! Update Post Router
+postsRouter.put("/:id", isLoggedIn, updatePost);
 
 module.exports = postsRouter;
