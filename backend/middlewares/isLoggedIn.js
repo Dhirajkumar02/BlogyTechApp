@@ -12,7 +12,7 @@ const isLoggedIn = (req, res, next) => {
 
     const token = authHeader.split(" ")[1];
 
-    jwt.verify(token, process.env.JWT_SECRET, async (err, decoded) => {
+    jwt.verify(token, process.env.JWT_KEY, async (err, decoded) => {
         //If unsuccessful then send the error message
         if (err) {
             const error = new Error(err?.message);

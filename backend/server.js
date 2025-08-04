@@ -2,10 +2,14 @@
 require("dotenv").config();
 
 const express = require("express");
-const usersRouter = require("./routes/users/usersRouter");
 const connectDB = require("./config/database");
-const { notFound, globalErrorHandler } = require("./middlewares/globalErrorHandler");
+const usersRouter = require("./routes/users/usersRouter");
 const categoriesRouter = require("./routes/categories/categoriesRouter");
+const postsRouter = require("./routes/posts/postsRouter");
+const {
+    notFound,
+    globalErrorHandler,
+} = require("./middlewares/globalErrorHandler");
 
 //! Create an express app
 const app = express();
@@ -22,13 +26,17 @@ app.use("/api/v1/users", usersRouter);
 //? Setup the Category Router
 app.use("/api/v1/categories", categoriesRouter);
 
+//? Setup the Post Router
+app.use("/api/v1/posts", postsRouter);
+
 //? Not Found Error Handler
 app.use(notFound);
 
 //? Global Error Handler
 app.use(globalErrorHandler);
 
+// Start the server
 const PORT = process.env.PORT || 9080;
 app.listen(PORT, () => {
-    console.log(`Server started at port ${PORT}`);
+    console.log(`Server running on http://localhost:${PORT}`);
 });
