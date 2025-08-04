@@ -10,6 +10,7 @@ const {
     notFound,
     globalErrorHandler,
 } = require("./middlewares/globalErrorHandler");
+const commentsRouter = require("./routes/comments/commentsRoute");
 
 //! Create an express app
 const app = express();
@@ -29,6 +30,8 @@ app.use("/api/v1/categories", categoriesRouter);
 //? Setup the Post Router
 app.use("/api/v1/posts", postsRouter);
 
+//? Setup the Comment Router
+app.use("/api/v1/comments", commentsRouter)
 //? Not Found Error Handler
 app.use(notFound);
 
