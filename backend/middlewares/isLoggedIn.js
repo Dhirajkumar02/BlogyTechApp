@@ -1,34 +1,52 @@
 const jwt = require("jsonwebtoken");
 const User = require("../models/Users/User");
 
-const isLoggedIn = (req, res, next) => {
+const isLoggedIn = async (req, res, next) => {
     console.log("isLogged executed");
 
-    //Fetch token from request
-    const authHeader = req.headers.authorization;
-    if (!authHeader || !authHeader.startsWith("Bearer ")) {
-        return res.status(401).json({ status: "Failed", message: "No token provided" });
-    }
-
-    const token = authHeader.split(" ")[1];
-
-    jwt.verify(token, process.env.JWT_KEY, async (err, decoded) => {
-        //If unsuccessful then send the error message
-        if (err) {
-            const error = new Error(err?.message);
-            next(err);
+    try {
+        // Get token
+        const authHeader = req.headers.authorization;
+        if (!authHeader || !authHeader.startsWith("Bearer ")) {
+            return res.status(401).json({
+                status: "Failed",
+                message: "No token provided. Please log in again.",
+            });
         }
 
-        //If successful, then pass the user object to next path
-        const userId = decoded?.id;
-        const user = await User.findById(userId).select("username email role _id");
+        const token = authHeader.split(" ")[1];
+
+        // Verify token
+        const decoded = jwt.verify(token, process.env.JWT_KEY); // throws if invalid
+
+        // Find user
+        const user = await User.findById(decoded?.id).select("username email role _id");
         if (!user) {
-            return res.status(401).json({ status: "Failed", message: "User not found" });
+            return res.status(401).json({
+                status: "Failed",
+                message: "User associated with this token no longer exists.",
+            });
         }
 
         req.userAuth = user;
         next();
-    });
+
+    } catch (err) {
+        console.error("JWT verification failed:", err.message);
+
+        // Check error type
+        let message = "Authentication failed";
+        if (err.name === "TokenExpiredError") {
+            message = "Session expired. Please log in again.";
+        } else if (err.name === "JsonWebTokenError") {
+            message = "Invalid token. Please log in again.";
+        }
+
+        return res.status(401).json({
+            status: "Failed",
+            message,
+        });
+    }
 };
 
 module.exports = isLoggedIn;
