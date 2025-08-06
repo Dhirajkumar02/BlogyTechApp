@@ -186,34 +186,82 @@ exports.followingUser = asyncHandler(async (req, resp, next) => {
 
     //Find the user to be followed
     const userIdToFollow = req.params.userIdToFollow;
-    const userProfile = await User.findById(userIdToFollow);
-    if (!userProfile) {
-        let error = new Error("User to be followed not present!");
-        next(error);
-        return;
+
+    if (!userIdToFollow) {
+        return next(new Error("User ID to follow is required."));
     }
 
     //Avoid current user following himself
     if (currentUserId.toString() === userIdToFollow.toString()) {
-        let error = new Error("You cannot follow yourself!");
-        next(error);
-        return;
+        return next(new Error("You cannot follow yourself!"));
     }
-    //Push the id to of userToFollow inside following array of current user
+
+    const userProfile = await User.findById(userIdToFollow);
+    if (!userProfile) {
+        return next(new Error("User to be followed not found."));
+    }
+
+    // Add to following list of current user
     await User.findByIdAndUpdate(
         currentUserId,
         { $addToSet: { following: userIdToFollow } },
         { new: true }
     );
-    //Push the current user id into the followers array of userToFollow
+
+    // Add to followers list of the user being followed
     await User.findByIdAndUpdate(
         userIdToFollow,
         { $addToSet: { followers: currentUserId } },
         { new: true }
     );
-    //Send the response
+
     resp.json({
         status: "success",
         message: "You have followed the user successfully!",
     });
 });
+
+//@desc Unfollow User
+//@route PUT /api/v1/users/unfollowing/:userIdToUnFollow
+//@access private
+exports.unFollowingUser = asyncHandler(async (req, resp, next) => {
+    //Find the current user id
+    const currentUserId = req?.userAuth?._id;
+
+    //Find the user to be followed
+    const userIdToUnFollow = req.params.userIdToUnFollow;
+
+    if (!userIdToUnFollow) {
+        return next(new Error("User ID to unfollow is required."));
+    }
+
+    //Avoid current user following himself
+    if (currentUserId.toString() === userIdToUnFollow.toString()) {
+        return next(new Error("You cannot unfollow yourself!"));
+    }
+
+    const userProfile = await User.findById(userIdToUnFollow);
+    if (!userProfile) {
+        return next(new Error("User to be unfollowed not found."));
+    }
+
+    // Remove from following list of current user
+    await User.findByIdAndUpdate(
+        currentUserId,
+        { $pull: { following: userIdToUnFollow } },
+        { new: true }
+    );
+
+    // Remove from followers list of the user being unfollowed
+    await User.findByIdAndUpdate(
+        userIdToUnFollow,
+        { $pull: { followers: currentUserId } },
+        { new: true }
+    );
+
+    resp.json({
+        status: "success",
+        message: "You have unfollowed the user successfully!",
+    });
+});
+

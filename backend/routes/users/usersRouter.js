@@ -7,6 +7,7 @@ const {
     unblockUser,
     viewOtherProfile,
     followingUser,
+    unFollowingUser,
 } = require("../../controllers/users/usersController");
 const isLoggedIn = require("../../middlewares/isLoggedIn");
 const usersRouter = express.Router();
@@ -33,11 +34,9 @@ usersRouter.get(
 );
 
 //!Follow a user Route
-usersRouter.put(
-    "/following/:userIdToFollow",
-    isLoggedIn,
-    followingUser
-);
+usersRouter.put("/following/:userIdToFollow", isLoggedIn, followingUser);
 
+//!UnFollow a user Route
+usersRouter.put("/unfollowing/:userIdToUnFollow", isLoggedIn, unFollowingUser);
 
 module.exports = usersRouter;
