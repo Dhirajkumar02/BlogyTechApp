@@ -65,7 +65,7 @@ exports.getProfile = asyncHandler(async (req, resp, next) => {
 });
 
 //@desc Block User
-//@route PUT /api/v1/users/block/userIdToBlock
+//@route PUT /api/v1/users/block/:userIdToBlock
 //@access private
 exports.blockUser = asyncHandler(async (req, resp) => {
     // Find the userId to be blocked
@@ -102,5 +102,118 @@ exports.blockUser = asyncHandler(async (req, resp) => {
     resp.json({
         status: "success",
         message: "User blocked successfully",
+    });
+});
+
+//@desc UnBlock User
+//@route PUT /api/v1/users/unblock/:userIdToUnBlock
+//@access private
+exports.unblockUser = asyncHandler(async (req, resp, next) => {
+    // Find the user to be unblocked
+    const userIdToUnBlock = req.params.userIdToUnBlock;
+    const userToUnBlock = await User.findById(userIdToUnBlock);
+    if (!userToUnBlock) {
+        let error = new Error("User to unblock not found");
+        next(error);
+        return;
+    }
+    //Find the current user
+    const userUnBlocking = req?.userAuth?._id;
+    const currentUser = await User.findById(userUnBlocking);
+
+    //Check if the user to unblock is already blocked
+    if (!currentUser.blockedUsers.includes(userIdToUnBlock)) {
+        let error = new Error("User not blocked!");
+        next(error);
+        return;
+    }
+    //Remove the user from the current user blockedUsers array
+    currentUser.blockedUsers = currentUser.blockedUsers.filter((id) => {
+        return id.toString() !== userIdToUnBlock;
+    });
+
+    //Update the database
+    await currentUser.save();
+
+    //return the response
+    resp.json({
+        status: "success",
+        message: "User unblocked successfully",
+    });
+});
+
+//@desc View another user profile
+//@route GET /api/v1/users/view-another-profile/:userProfileId
+//@access private
+
+exports.viewOtherProfile = asyncHandler(async (req, resp, next) => {
+    //Get the userId whose profile is to be viewed
+    const userProfileId = req.params.userProfileId;
+    const userProfile = await User.findById(userProfileId);
+    if (!userProfile) {
+        let error = new Error("User whose profile is to be viewed not present!");
+        next(error);
+        return;
+    }
+    const currentUserId = req?.userAuth?._id;
+
+    //Check if we have already viewed the profile of userProfile
+    if (userProfile.profileViewers.includes(currentUserId)) {
+        let error = new Error("You have already viewed the profile!");
+        next(error);
+        return;
+    }
+
+    //Push the currentUserId into array of userProfile
+    userProfile.profileViewers.push(currentUserId);
+
+    //Update the DB
+    await userProfile.save();
+
+    //return the response
+    resp.json({
+        status: "success",
+        message: "Profile viewed successfully!",
+    });
+});
+
+//@desc Follow User
+//@route PUT /api/v1/users/following/:userIdToFollow
+//@access private
+exports.followingUser = asyncHandler(async (req, resp, next) => {
+    //Find the current user id
+    const currentUserId = req?.userAuth?._id;
+
+    //Find the user to be followed
+    const userIdToFollow = req.params.userIdToFollow;
+    const userProfile = await User.findById(userIdToFollow);
+    if (!userProfile) {
+        let error = new Error("User to be followed not present!");
+        next(error);
+        return;
+    }
+
+    //Avoid current user following himself
+    if (currentUserId.toString() === userIdToFollow.toString()) {
+        let error = new Error("You cannot follow yourself!");
+        next(error);
+        return;
+    }
+    //Push the id to of userToFollow inside following array of current user
+    await User.findByIdAndUpdate(
+        currentUserId,
+        { $addToSet: { following: userIdToFollow } },
+        { new: true }
+    );
+    //Push the current user id into the followers array of userToFollow
+    await User.findByIdAndUpdate(
+        userIdToFollow,
+        { $addToSet: { followers: currentUserId } },
+        { new: true }
+    );
+    //Send the response
+    resp.json({
+        status: "success",
+        message: "You have followed the user successfully!",
     });
 });
