@@ -2,6 +2,7 @@ const bcrypt = require("bcryptjs");
 const User = require("../../models/Users/User");
 const generateToken = require("../../utils/generateToken");
 const asyncHandler = require("express-async-handler");
+const sendEmail = require("../../utils/sendEmail");
 
 //@desc Register new user
 //@route POST /api/v1/users/register
@@ -187,34 +188,33 @@ exports.followingUser = asyncHandler(async (req, resp, next) => {
     //Find the user to be followed
     const userIdToFollow = req.params.userIdToFollow;
 
-    if (!userIdToFollow) {
-        return next(new Error("User ID to follow is required."));
+    //Check whether user is exists
+    const userProfile = await User.findById(userIdToFollow);
+    if (!userProfile) {
+        let error = new Error("User to be followed not present!");
+        next(error);
+        return;
     }
 
     //Avoid current user following himself
     if (currentUserId.toString() === userIdToFollow.toString()) {
-        return next(new Error("You cannot follow yourself!"));
+        let error = new Error("You cannot follow yourself!");
+        next(error);
+        return;
     }
-
-    const userProfile = await User.findById(userIdToFollow);
-    if (!userProfile) {
-        return next(new Error("User to be followed not found."));
-    }
-
-    // Add to following list of current user
+    //Push the id to of userToFollow inside following array of current user
     await User.findByIdAndUpdate(
         currentUserId,
         { $addToSet: { following: userIdToFollow } },
         { new: true }
     );
-
-    // Add to followers list of the user being followed
+    //Push the current user id into the followers array of userToFollow
     await User.findByIdAndUpdate(
         userIdToFollow,
         { $addToSet: { followers: currentUserId } },
         { new: true }
     );
-
+    //Send the response
     resp.json({
         status: "success",
         message: "You have followed the user successfully!",
@@ -231,37 +231,74 @@ exports.unFollowingUser = asyncHandler(async (req, resp, next) => {
     //Find the user to be followed
     const userIdToUnFollow = req.params.userIdToUnFollow;
 
-    if (!userIdToUnFollow) {
-        return next(new Error("User ID to unfollow is required."));
-    }
-
     //Avoid current user following himself
     if (currentUserId.toString() === userIdToUnFollow.toString()) {
-        return next(new Error("You cannot unfollow yourself!"));
+        let error = new Error("You cannot unfollow yourself!");
+        next(error);
+        return;
     }
 
+    // Check whether the user is exists
     const userProfile = await User.findById(userIdToUnFollow);
     if (!userProfile) {
-        return next(new Error("User to be unfollowed not found."));
+        let error = new Error("User to be Unfollowed not present!");
+        next(error);
+        return;
     }
+    //Get the current user object
+    const currentUser = await User.findById(currentUserId);
 
-    // Remove from following list of current user
+    //Check whether the current user has followed userIdToUnFollow or not
+    if (!currentUser.following.includes(userIdToUnFollow)) {
+        let error = new Error(
+            "You cannot unfollow the user which you did not follow"
+        );
+        next(error);
+        return;
+    }
+    //Remove the userIdToUnFollow from the following array of currentUserId
     await User.findByIdAndUpdate(
         currentUserId,
         { $pull: { following: userIdToUnFollow } },
         { new: true }
     );
 
-    // Remove from followers list of the user being unfollowed
+    //Remove the currentUserId from the followers array of userToUnFollow
     await User.findByIdAndUpdate(
         userIdToUnFollow,
         { $pull: { followers: currentUserId } },
         { new: true }
     );
 
+    //Send the response
     resp.json({
         status: "success",
         message: "You have unfollowed the user successfully!",
     });
 });
 
+//@desc Forgot Password
+//@route POST /api/v1/users/forgot-password
+//@access public
+exports.forgotPassword = asyncHandler(async (req, resp, next) => {
+    //!Fetch the email
+    const { email } = req.body;
+
+    //!Find email in the DB
+    const userFound = await User.findOne({ email });
+    if (!userFound) {
+        let error = new Error("This email id does not exists or registered!");
+        next(error);
+        return;
+    }
+    //!Get the reset token
+    const resetToken = await userFound.generatePasswordResetToken();
+    //!Save the changes(resetToken and expiryTime ) to the DB
+    await userFound.save();
+    sendEmail(email, resetToken);
+    //send the response
+    resp.json({
+        status: "success",
+        message: "Password reset token sent to your email successfully",
+    });
+});

@@ -11,8 +11,10 @@ const {
     globalErrorHandler,
 } = require("./middlewares/globalErrorHandler");
 const commentsRouter = require("./routes/comments/commentsRoute");
+const sendEmail = require("./utils/sendEmail");
 
 //! Create an express app
+//sendEmail("dhirajkumarsaah@gmail.com", "HellowWelcome123");
 const app = express();
 
 //! Establish connection to MongoDB
@@ -31,7 +33,7 @@ app.use("/api/v1/categories", categoriesRouter);
 app.use("/api/v1/posts", postsRouter);
 
 //? Setup the Comment Router
-app.use("/api/v1/comments", commentsRouter)
+app.use("/api/v1/comments", commentsRouter);
 //? Not Found Error Handler
 app.use(notFound);
 
