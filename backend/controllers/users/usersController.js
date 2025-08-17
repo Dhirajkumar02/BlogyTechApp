@@ -1,8 +1,10 @@
 const bcrypt = require("bcryptjs");
+const crypto = require("crypto");
 const User = require("../../models/Users/User");
 const generateToken = require("../../utils/generateToken");
 const asyncHandler = require("express-async-handler");
 const sendEmail = require("../../utils/sendEmail");
+const sendAccountVerificationEmail = require("../../utils/sendAccountVerificationEmail");
 
 //@desc Register new user
 //@route POST /api/v1/users/register
@@ -300,5 +302,75 @@ exports.forgotPassword = asyncHandler(async (req, resp, next) => {
     resp.json({
         status: "success",
         message: "Password reset token sent to your email successfully",
+    });
+});
+
+//@desc Reset Password
+//@route POST /api/v1/users/reset-password/:resetToken
+//@access public
+exports.resetPassword = asyncHandler(async (req, resp, next) => {
+    //Get the token from params
+    const { resetToken } = req.params;
+    //Get the password
+    const { password } = req.body;
+
+    //Convert resetToken into hashed token
+    const hashedToken = crypto
+        .createHash("sha256")
+        .update(resetToken)
+        .digest("hex");
+
+    //Verify the token with DB
+    const userFound = await User.findOne({
+        passwordResetToken: hashedToken,
+        passwordResetExpires: { $gt: Date.now() },
+    });
+    //If user is not found
+    if (!userFound) {
+        let error = new Error("Password reset token is invalid or expired");
+        next(error);
+        return;
+    }
+    //Update the new password
+    const salt = await bcrypt.genSalt(10);
+    userFound.password = await bcrypt.hash(password, salt);
+
+    //Clean reset fields
+    userFound.passwordResetToken = undefined;
+    userFound.passwordResetExpires = undefined;
+
+    //Resave the user
+    await userFound.save();
+    //send the response
+    resp.json({
+        status: "success",
+        message: "Password has been changed successfully",
+    });
+});
+
+//@desc Account Verification
+//@route PUT /api/v1/users/account-verification-email
+//@access private
+exports.accountVerificationEmail = asyncHandler(async (req, resp, next) => {
+    //Find the current User's email
+    const currentUser = await User.findById(req?.userAuth?._id);
+    if (!currentUser) {
+        let error = new Error("User not found!");
+        next(error);
+        return;
+    }
+    //Get the token from current user object
+    const verifyToken = await currentUser.generateAccountVerificationToken();
+
+    //Resave the user
+    await currentUser.save();
+
+    //send the verification email
+    sendAccountVerificationEmail(currentUser.email, verifyToken);
+
+    //send the response
+    resp.json({
+        status: "success",
+        message: `Account verification email has been sent to your registered email id ${currentUser.email}`,
     });
 });

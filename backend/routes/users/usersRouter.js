@@ -9,6 +9,8 @@ const {
     followingUser,
     unFollowingUser,
     forgotPassword,
+    resetPassword,
+    accountVerificationEmail,
 } = require("../../controllers/users/usersController");
 const isLoggedIn = require("../../middlewares/isLoggedIn");
 const usersRouter = express.Router();
@@ -42,5 +44,11 @@ usersRouter.put("/unfollowing/:userIdToUnFollow", isLoggedIn, unFollowingUser);
 
 //!Forgot password route
 usersRouter.post("/forgot-password", forgotPassword);
+
+//!Reset password route
+usersRouter.put("/reset-password/:resetToken", resetPassword);
+
+//!Send Account Verification Email route
+usersRouter.put("/account-verification-email", isLoggedIn, accountVerificationEmail);
 
 module.exports = usersRouter;
