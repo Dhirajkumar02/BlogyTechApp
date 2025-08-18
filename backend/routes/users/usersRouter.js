@@ -11,6 +11,7 @@ const {
     forgotPassword,
     resetPassword,
     accountVerificationEmail,
+    verifyAccount,
 } = require("../../controllers/users/usersController");
 const isLoggedIn = require("../../middlewares/isLoggedIn");
 const usersRouter = express.Router();
@@ -50,5 +51,8 @@ usersRouter.put("/reset-password/:resetToken", resetPassword);
 
 //!Send Account Verification Email route
 usersRouter.put("/account-verification-email", isLoggedIn, accountVerificationEmail);
+
+//! Account token Verification route
+usersRouter.put("/verify-account/:verifyToken", isLoggedIn, verifyAccount);
 
 module.exports = usersRouter;
