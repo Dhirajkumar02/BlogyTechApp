@@ -121,3 +121,143 @@ exports.deletePost = asyncHandler(async (req, resp) => {
         message: "Post deleted successfully",
     });
 });
+
+//@desc Like A Post
+//@route PUT /api/v1/posts/like/:postId
+//@access private
+
+exports.likePost = asyncHandler(async (req, resp, next) => {
+    //Get the id of the post
+    const { postId } = req.params;
+    //Get the current user
+    const currentUserId = req.userAuth._id;
+    //Search the post
+    const post = await Post.findById(postId);
+    if (!post) {
+        let error = new Error("Post not found");
+        next(error);
+        return;
+    }
+    //Add the currentUserId to likes array
+    await Post.findByIdAndUpdate(
+        postId,
+        { $addToSet: { likes: currentUserId } },
+        { new: true }
+    );
+    //Remove the currentUserId from dislikes array
+    post.dislikes = post.dislikes.filter(
+        (userId) => userId.toString() !== currentUserId.toString()
+    );
+    //Resave the post
+    await post.save();
+    //Send the response
+    resp.json({
+        status: "success",
+        message: "Post liked successfully",
+    });
+});
+
+//@desc Dislike A Post
+//@route PUT /api/v1/posts/dislike/:postId
+//@access private
+
+exports.disLikePost = asyncHandler(async (req, resp, next) => {
+    //Get the id of the post
+    const { postId } = req.params;
+    //Get the current user
+    const currentUserId = req.userAuth._id;
+    //Search the post
+    const post = await Post.findById(postId);
+    if (!post) {
+        let error = new Error("Post not found");
+        next(error);
+        return;
+    }
+    //Add the currentUserId to likes array
+    await Post.findByIdAndUpdate(
+        postId,
+        { $addToSet: { dislikes: currentUserId } },
+        { new: true }
+    );
+    //Remove the currentUserId from likes array
+    post.likes = post.likes.filter(
+        (userId) => userId.toString() !== currentUserId.toString()
+    );
+    //Resave the post
+    await post.save();
+    //Send the response
+    resp.json({
+        status: "success",
+        message: "Post disliked successfully",
+    });
+});
+
+//@desc Claps A Post
+//@route PUT /api/v1/posts/claps/:postId
+//@access private
+exports.clapPost = asyncHandler(async (req, resp, next) => {
+    //Get the id of the post
+    const { postId } = req.params;
+    //Search the post
+    const post = await Post.findById(postId);
+    if (!post) {
+        let error = new Error("Post not found");
+        next(error);
+        return;
+    }
+    //Implements claps
+    const updatedPost = await Post.findByIdAndUpdate(
+        postId,
+        { $inc: { claps: 1 } },
+        { new: true }
+    );
+    //Send the response
+    resp.json({
+        status: "success",
+        message: "Post clapped successfully",
+        updatedPost,
+    });
+});
+
+//@desc Schedule A Post
+//@route PUT /api/v1/posts/schedule/:postId
+//@access private
+exports.schedulePost = asyncHandler(async (req, resp, next) => {
+    //Get the data
+    const { postId } = req.params;
+    const { scheduledPublished } = req.body;
+    //Check if postId and scheduledPublish are Present
+    if (!postId || !scheduledPublished) {
+        let error = new Error("PostId abd Schedule Date is required");
+        next(error);
+        return;
+    }
+    //Find the post from DB
+    const post = await Post.findById(postId);
+    if (!post) {
+        let error = new Error("Post not found");
+        next(error);
+        return;
+    }
+    //Check if the currentUser is the author
+    if (post.author.toString() !== req.userAuth._id.toString()) {
+        let error = new Error("You can schedule only your post");
+        next(error);
+        return;
+    }
+    const scheduleDate = new Date(scheduledPublished);
+    const currentDate = new Date();
+    if (scheduleDate < currentDate) {
+        let error = new Error("Scheduled date cannot be previous date");
+        next(error);
+        return;
+    }
+    post.scheduledPublished = scheduleDate;
+    await post.save();
+    //Send the response
+    resp.json({
+        status: "success",
+        message: "Post scheduled successfully",
+        post,
+    });
+});
