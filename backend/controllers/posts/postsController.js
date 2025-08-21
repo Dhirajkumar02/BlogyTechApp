@@ -2,6 +2,7 @@ const asyncHandler = require("express-async-handler");
 const Post = require("../../models/Posts/Post");
 const User = require("../../models/Users/User");
 const Category = require("../../models/Categories/Category");
+const { model } = require("mongoose");
 
 //@desc Create a new post
 //@route POST /api/v1/posts
@@ -49,16 +50,42 @@ exports.createPost = asyncHandler(async (req, resp, next) => {
 
 //@desc Get all posts
 //@route GET /api/v1/posts
-//@access public
+//@access private
 exports.getAllPosts = asyncHandler(async (req, resp) => {
-    // Fetch all posts from the database and populate author & category details
-    const getAllPosts = await Post.find({}).populate("author category");
+    //Get the current user
+    const currentUserId = req.userAuth._id;
+
+    //Get the current time
+    const currentDateTime = new Date();
+
+    //Get all those users who have blocked the current user
+    const userBlockingCurrentUser = await User.find({
+        blockedUsers: currentUserId,
+    });
+    //Extract the id of the users who have blocked the current user
+    const blockingUserIds = userBlockingCurrentUser.map((userObj) => userObj._id);
+
+    const query = {
+        author: { $nin: blockingUserIds },
+        $or: [
+            {
+                scheduledPublished: { $lte: currentDateTime },
+                scheduledPublished: null,
+            },
+        ],
+    };
+    //Fetch those posts whose author is not blockingUserIds
+    const allPosts = await Post.find(query).populate({
+        path: "author",
+        model: "User",
+        select: "username email role",
+    });
 
     // Send the list of posts in response
     resp.status(200).json({
         status: "success",
         message: "All posts successfully fetched",
-        posts: getAllPosts,
+        posts: allPosts,
     });
 });
 

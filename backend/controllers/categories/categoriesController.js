@@ -26,7 +26,10 @@ exports.createCategory = asyncHandler(async (req, resp, next) => {
 //@route GET /api/v1/categories
 //@access public
 exports.getAllCategories = asyncHandler(async (req, resp) => {
-    const allCategories = await Category.find({});
+    const allCategories = await Category.find({}).populate({
+        path: "posts",
+        model: "Post",
+    });
     resp.status(201).json({
         status: "success",
         message: "All categories successfully fetched",
@@ -52,7 +55,11 @@ exports.deleteCategory = asyncHandler(async (req, resp) => {
 exports.updateCategory = asyncHandler(async (req, resp) => {
     const catId = req.params.id;
     const name = req.body.name;
-    const updatedCategory = await Category.findByIdAndUpdate(catId, { name: name }, { new: true, runValidators: true });
+    const updatedCategory = await Category.findByIdAndUpdate(
+        catId,
+        { name: name },
+        { new: true, runValidators: true }
+    );
     resp.status(201).json({
         status: "success",
         message: "Category Updated successfully",

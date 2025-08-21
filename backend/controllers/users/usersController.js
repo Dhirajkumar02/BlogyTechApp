@@ -59,7 +59,27 @@ exports.login = asyncHandler(async (req, resp, next) => {
 //@access private
 exports.getProfile = asyncHandler(async (req, resp, next) => {
     console.log("Rec:", req.userAuth);
-    const user = await User.findById(req.userAuth.id);
+    const user = await User.findById(req.userAuth.id)
+        .populate({
+            path: "posts",
+            model: "Post",
+        })
+        .populate({
+            path: "following",
+            model: "User",
+        })
+        .populate({
+            path: "followers",
+            model: "User",
+        })
+        .populate({
+            path: "blockedUsers",
+            model: "User",
+        })
+        .populate({
+            path: "profileViewers",
+            model: "User",
+        });
     resp.json({
         status: "success",
         message: "Profile fetched",

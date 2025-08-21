@@ -16,10 +16,10 @@ const isAccountVerified = require("../../middlewares/isAccountVerified");
 const postsRouter = express.Router();
 
 //! Create Post Router
-postsRouter.post("/", isLoggedIn, createPost);
+postsRouter.post("/", isLoggedIn, isAccountVerified, createPost);
 
 //! Fetch all Posts Router
-postsRouter.get("/", getAllPosts);
+postsRouter.get("/", isLoggedIn, isAccountVerified, getAllPosts);
 
 //! Fetch Single Post Router
 postsRouter.get("/:id", getSinglePost);
