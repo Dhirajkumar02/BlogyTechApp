@@ -24,6 +24,7 @@ exports.createPost = asyncHandler(async (req, resp, next) => {
         content,
         category: categoryId,
         author: req?.userAuth?._id, // Set author from authenticated user
+        image: req.file.path,
     });
 
     // Add the newly created post ID to the user's posts array

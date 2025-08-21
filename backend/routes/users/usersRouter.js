@@ -1,4 +1,5 @@
 const express = require("express");
+const upload = require("../../utils/fileUpload")
 const {
     register,
     login,
@@ -12,14 +13,31 @@ const {
     resetPassword,
     accountVerificationEmail,
     verifyAccount,
+    updateProfile,
+    changePassword,
 } = require("../../controllers/users/usersController");
 const isLoggedIn = require("../../middlewares/isLoggedIn");
+const { protect } = require("../../middlewares/isProtected");
 const usersRouter = express.Router();
 //!Register Route
 usersRouter.post("/register", register);
 
 //!Login Route
 usersRouter.post("/login", login);
+
+//! update profile with images route
+usersRouter.put(
+    "/update-profile",
+    isLoggedIn,
+    upload.fields([
+        { name: "profilePic", maxCount: 1 },
+        { name: "coverPhoto", maxCount: 1 },
+    ]),
+    updateProfile
+);
+
+//!Password change route
+usersRouter.put("/change-password", protect, changePassword);
 
 //!Profile Route
 usersRouter.get("/profile/", isLoggedIn, getProfile);

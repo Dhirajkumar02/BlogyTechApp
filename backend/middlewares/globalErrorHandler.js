@@ -1,15 +1,22 @@
-const globalErrorHandler = (error, req, resp, next) => {
-    const status = error?.status ? error.status : "failed";
-    const message = error?.message;
-    const stack = error?.stack;
-    resp.status(500).json({ status, message, stack });
+const globalErrorHandler = (error, req, res, next) => {
+    const statusCode = error.statusCode || 500;
+    const status = error.status || "failed";
+    const message = error.message || "Internal Server Error";
+    const stack =
+        process.env.NODE_ENV === "development" ? error.stack : undefined;
 
+    res.status(statusCode).json({
+        status,
+        message,
+        stack,
+    });
 };
 
-const notFound = (req, resp, next) => {
-    let error = new Error(
-        `Cannot find the route for ${req.originalUrl} at the server`
-    );
+const notFound = (req, res, next) => {
+    const error = new Error(`Cannot find route ${req.originalUrl}`);
+    error.status = "failed";
+    error.statusCode = 404;
     next(error);
-}
-module.exports = { globalErrorHandler, notFound }
+};
+
+module.exports = { globalErrorHandler, notFound };

@@ -1,16 +1,32 @@
 const User = require("../models/Users/User");
-const isAccountVerified = async (req, resp, next) => {
+
+const isAccountVerified = async (req, res, next) => {
     try {
-        //Find User by id
-        const currentUser = await User.findById(req.userAuth._id);
-        //Check whether the user is verified
+        const currentUser = await User.findById(req.userAuth._id).select(
+            "isVerified"
+        );
+        if (!currentUser) {
+            return res.status(404).json({
+                status: "failed",
+                message: "User not found",
+            });
+        }
+
         if (currentUser.isVerified) {
-            next();
+            return next();
         } else {
-            resp.status(401).json({ message: "Account not verified" });
+            return res.status(401).json({
+                status: "failed",
+                message: "Account not verified",
+            });
         }
     } catch (error) {
-        resp.status(500).json({ message: "Server error", error });
+        return res.status(500).json({
+            status: "failed",
+            message: "Server error",
+            error: error.message,
+        });
     }
 };
+
 module.exports = isAccountVerified;
