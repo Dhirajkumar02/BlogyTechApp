@@ -3,66 +3,72 @@ const crypto = require("crypto");
 const User = require("../../models/Users/User");
 const generateToken = require("../../utils/generateToken");
 const asyncHandler = require("express-async-handler");
-const sendEmail = require("../../utils/sendEmail");
-const sendAccountVerificationEmail = require("../../utils/sendAccountVerificationEmail");
+const {
+    sendResetPasswordEmail,
+    sendAccountVerificationEmail,
+} = require("../../utils/emailService");
 
-//@desc Register new user
-//@route POST /api/v1/users/register
-//@access public
+
+//---------------------------------------------------------
+// @desc    Register new user
+// @route   POST /api/v1/users/register
+// @access  Public
+//---------------------------------------------------------
 exports.register = asyncHandler(async (req, res) => {
     const { username, email, password } = req.body;
 
+    // Check if user already exists
     const userExists = await User.findOne({ email });
     if (userExists) {
-        throw new Error("User already exists with this email!");
+        return res
+            .status(400)
+            .json({ status: "failed", message: "User already exists" });
     }
 
-    const salt = await bcrypt.genSalt(10);
-    const hashedPassword = await bcrypt.hash(password, salt);
-
-    const newUser = await User.create({
-        username,
-        email,
-        password: hashedPassword,
-    });
+    // Create user (password will be hashed by Mongoose pre-save hook)
+    const user = await User.create({ username, email, password });
 
     res.status(201).json({
         status: "success",
-        message: "User registered successfully!",
+        message: "User registered successfully",
         user: {
-            _id: newUser._id,
-            username: newUser.username,
-            email: newUser.email,
-            role: newUser.role,
-            profilePic: newUser.profilePic,
-            coverPhoto: newUser.coverPhoto,
+            _id: user._id,
+            username: user.username,
+            email: user.email,
+            role: user.role,
         },
     });
 });
 
-//@desc Login user
-//@route POST /api/v1/users/login
-//@access public
+//---------------------------------------------------------
+// @desc    Login user
+// @route   POST /api/v1/users/login
+// @access  Public
+//---------------------------------------------------------
 exports.login = asyncHandler(async (req, res) => {
     const { email, password } = req.body;
 
+    // Find user with password field
     const user = await User.findOne({ email }).select("+password");
     if (!user) {
         return res
             .status(401)
-            .json({ status: "failed", message: "Invalid credentials" });
+            .json({ status: "failed", message: "Invalid credentials (email)" });
     }
 
+    // Compare passwords
     const isMatched = await bcrypt.compare(password, user.password);
     if (!isMatched) {
         return res
             .status(401)
-            .json({ status: "failed", message: "Invalid credentials" });
+            .json({ status: "failed", message: "Invalid credentials (password)" });
     }
 
+    // Update last login
     user.lastLogin = new Date();
     await user.save();
 
+    // Send response with token
     res.json({
         status: "success",
         message: "Login successful",
@@ -76,9 +82,157 @@ exports.login = asyncHandler(async (req, res) => {
     });
 });
 
+//---------------------------------------------------------
+// @desc    Change password (while logged in)
+// @route   PUT /api/v1/users/change-password
+// @access  Private
+//---------------------------------------------------------
+exports.changePassword = asyncHandler(async (req, res) => {
+    const userId = req.userAuth._id; // userAuth comes from authMiddleware
+    const { oldPassword, newPassword } = req.body;
+
+    // Find user
+    const user = await User.findById(userId).select("+password");
+    if (!user) {
+        return res
+            .status(404)
+            .json({ status: "failed", message: "User not found" });
+    }
+
+    // Check old password
+    const isMatch = await bcrypt.compare(oldPassword, user.password);
+    if (!isMatch) {
+        return res
+            .status(400)
+            .json({ status: "failed", message: "Old password is incorrect" });
+    }
+
+    // Assign new password (Mongoose pre-save hook will hash it)
+    user.password = newPassword;
+    user.passwordChangedAt = Date.now();
+
+    await user.save();
+
+    res.json({
+        status: "success",
+        message: "Password updated successfully. Please login again.",
+    });
+});
+
+//---------------------------------------------------------
+// @desc    Forgot password (send reset link via email)
+// @route   POST /api/v1/users/forgot-password
+// @access  Public
+//---------------------------------------------------------
+exports.forgotPassword = asyncHandler(async (req, res) => {
+    const { email } = req.body;
+
+    // 1. Check if user exists
+    const user = await User.findOne({ email });
+    if (!user) {
+        return res
+            .status(404)
+            .json({ status: "failed", message: "User not found" });
+    }
+
+    // 2. Generate a reset token (raw token for email, hashed for DB)
+    const resetToken = crypto.randomBytes(32).toString("hex"); // raw token for email
+    const hashedToken = crypto
+        .createHash("sha256")
+        .update(resetToken)
+        .digest("hex"); // store hashed in DB
+
+    // 3. Save hashed token & expiry in DB
+    user.passwordResetToken = hashedToken;
+    user.passwordResetExpires = Date.now() + 10 * 60 * 1000; // 10 minutes expiry
+    await user.save();
+
+    // 4. Create reset URL (send raw token in URL)
+    const resetUrl = `${req.protocol}://${req.get(
+        "host"
+    )}/api/v1/users/reset-password/${resetToken}`;
+
+    // 5. Email message
+    const message = `You requested a password reset.\n\nClick the link below to reset your password:\n\n${resetUrl}\n\nIf you did not request this, please ignore.`;
+
+    try {
+        // 6. Send email
+        await sendResetPasswordEmail({
+            email: user.email,
+            subject: "Password Reset Request",
+            message,
+        });
+
+        res.json({
+            status: "success",
+            message: "Password reset link sent to your email",
+        });
+    } catch (err) {
+        // 7. If email fails → clear reset fields
+        user.passwordResetToken = undefined;
+        user.passwordResetExpires = undefined;
+        await user.save();
+
+        res
+            .status(500)
+            .json({ status: "failed", message: "Email could not be sent" });
+    }
+});
+
+//---------------------------------------------------------
+// @desc    Reset password (via reset token)
+// @route   POST /api/v1/users/reset-password/:resetToken
+// @access  Public
+//---------------------------------------------------------
+exports.resetPassword = asyncHandler(async (req, res) => {
+    const { resetToken } = req.params;
+    const { password } = req.body;
+
+    // 1. Hash the token from params to compare with DB
+    const hashedToken = crypto
+        .createHash("sha256")
+        .update(resetToken)
+        .digest("hex");
+
+    // 2. Find user with valid token & expiry
+    const user = await User.findOne({
+        passwordResetToken: hashedToken,
+        passwordResetExpires: { $gt: Date.now() }, // not expired
+    });
+
+    if (!user) {
+        return res.status(400).json({
+            status: "failed",
+            message: "Invalid or expired reset token",
+        });
+    }
+
+    // 3. Hash new password manually (safest)
+    const salt = await bcrypt.genSalt(10);
+    user.password = await bcrypt.hash(password, salt);
+
+    // 4. Clear reset fields
+    user.passwordResetToken = undefined;
+    user.passwordResetExpires = undefined;
+
+    // 5. Save new password
+    await user.save();
+
+    // 6. Optional: return JWT to auto-login user
+    // const token = generateToken(user._id); // if you use JWT
+    // res.json({ status: "success", token });
+
+    res.json({
+        status: "success",
+        message: "Password has been reset successfully",
+    });
+});
+
+//-------------------------------------------------------------
 //@desc Update user profile (after login)
 //@route PUT /api/v1/users/update-profile
 //@access private
+//-------------------------------------------------------------
 exports.updateProfile = asyncHandler(async (req, res) => {
     const userId = req.userAuth._id;
     const { bio, location } = req.body;
@@ -107,42 +261,11 @@ exports.updateProfile = asyncHandler(async (req, res) => {
     });
 });
 
-//@desc Change password (while logged in)
-//@route PUT /api/v1/users/change-password
-//@access private
-exports.changePassword = asyncHandler(async (req, res) => {
-    const userId = req.userAuth._id;
-    const { oldPassword, newPassword } = req.body;
-
-    const user = await User.findById(userId).select("+password");
-    if (!user) {
-        return res
-            .status(404)
-            .json({ status: "failed", message: "User not found" });
-    }
-
-    const isMatch = await bcrypt.compare(oldPassword, user.password);
-    if (!isMatch) {
-        return res
-            .status(400)
-            .json({ status: "failed", message: "Old password is incorrect" });
-    }
-
-    const salt = await bcrypt.genSalt(10);
-    user.password = await bcrypt.hash(newPassword, salt);
-    user.passwordChangedAt = Date.now();
-
-    await user.save();
-
-    res.json({
-        status: "success",
-        message: "Password updated successfully. Please login again.",
-    });
-});
-
+//---------------------------------------------------------------
 //@desc Profile view
 //@route GET /api/v1/users/profile/:id
 //@access private
+//---------------------------------------------------------------
 exports.getProfile = asyncHandler(async (req, resp, next) => {
     console.log("Rec:", req.userAuth);
     const user = await User.findById(req.userAuth.id)
@@ -173,9 +296,11 @@ exports.getProfile = asyncHandler(async (req, resp, next) => {
     });
 });
 
+//---------------------------------------------------------------
 //@desc Block User
 //@route PUT /api/v1/users/block/:userIdToBlock
 //@access private
+//---------------------------------------------------------------
 exports.blockUser = asyncHandler(async (req, resp) => {
     // Find the userId to be blocked
     const userIdToBlock = req.params.userIdToBlock;
@@ -214,9 +339,11 @@ exports.blockUser = asyncHandler(async (req, resp) => {
     });
 });
 
+//---------------------------------------------------------------
 //@desc UnBlock User
 //@route PUT /api/v1/users/unblock/:userIdToUnBlock
 //@access private
+//---------------------------------------------------------------
 exports.unblockUser = asyncHandler(async (req, resp, next) => {
     // Find the user to be unblocked
     const userIdToUnBlock = req.params.userIdToUnBlock;
@@ -251,10 +378,11 @@ exports.unblockUser = asyncHandler(async (req, resp, next) => {
     });
 });
 
+//---------------------------------------------------------------
 //@desc View another user profile
 //@route GET /api/v1/users/view-another-profile/:userProfileId
 //@access private
-
+//---------------------------------------------------------------
 exports.viewOtherProfile = asyncHandler(async (req, resp, next) => {
     //Get the userId whose profile is to be viewed
     const userProfileId = req.params.userProfileId;
@@ -286,9 +414,11 @@ exports.viewOtherProfile = asyncHandler(async (req, resp, next) => {
     });
 });
 
+//---------------------------------------------------------------
 //@desc Follow User
 //@route PUT /api/v1/users/following/:userIdToFollow
 //@access private
+//---------------------------------------------------------------
 exports.followingUser = asyncHandler(async (req, resp, next) => {
     //Find the current user id
     const currentUserId = req?.userAuth?._id;
@@ -329,9 +459,11 @@ exports.followingUser = asyncHandler(async (req, resp, next) => {
     });
 });
 
+//---------------------------------------------------------------
 //@desc Unfollow User
 //@route PUT /api/v1/users/unfollowing/:userIdToUnFollow
 //@access private
+//---------------------------------------------------------------
 exports.unFollowingUser = asyncHandler(async (req, resp, next) => {
     //Find the current user id
     const currentUserId = req?.userAuth?._id;
@@ -385,69 +517,11 @@ exports.unFollowingUser = asyncHandler(async (req, resp, next) => {
     });
 });
 
-//@desc Forgot Password
-//@route POST /api/v1/users/forgot-password
-//@access public
-exports.forgotPassword = asyncHandler(async (req, res) => {
-    const { email } = req.body;
-
-    const user = await User.findOne({ email });
-    if (!user) {
-        return res
-            .status(404)
-            .json({ status: "failed", message: "Email not registered" });
-    }
-
-    const resetToken = user.generatePasswordResetToken();
-    await user.save();
-
-    sendEmail(email, resetToken);
-
-    res.json({
-        status: "success",
-        message: "Password reset token sent to your email",
-    });
-});
-
-//@desc Reset Password
-//@route POST /api/v1/users/reset-password/:resetToken
-//@access public
-exports.resetPassword = asyncHandler(async (req, res) => {
-    const { resetToken } = req.params;
-    const { password } = req.body;
-
-    const hashedToken = crypto
-        .createHash("sha256")
-        .update(resetToken)
-        .digest("hex");
-
-    const user = await User.findOne({
-        passwordResetToken: hashedToken,
-        passwordResetExpires: { $gt: Date.now() },
-    }).select("+password");
-
-    if (!user) {
-        return res
-            .status(400)
-            .json({ status: "failed", message: "Invalid or expired reset token" });
-    }
-
-    const salt = await bcrypt.genSalt(10);
-    user.password = await bcrypt.hash(password, salt);
-    user.passwordResetToken = undefined;
-    user.passwordResetExpires = undefined;
-
-    await user.save();
-
-    res.json({
-        status: "success",
-        message: "Password has been reset successfully",
-    });
-});
-
+//---------------------------------------------------------------
 //@desc Account Verification Email
 //@route PUT /api/v1/users/account-verification-email
 //@access private
+//---------------------------------------------------------------
 exports.accountVerificationEmail = asyncHandler(async (req, res) => {
     const currentUser = await User.findById(req.userAuth._id);
     if (!currentUser)
@@ -458,7 +532,8 @@ exports.accountVerificationEmail = asyncHandler(async (req, res) => {
     const verifyToken = currentUser.generateAccountVerificationToken();
     await currentUser.save();
 
-    sendAccountVerificationEmail(currentUser.email, verifyToken);
+    // Send email
+    await sendAccountVerificationEmail(currentUser.email, verifyToken);
 
     res.json({
         status: "success",
@@ -466,9 +541,11 @@ exports.accountVerificationEmail = asyncHandler(async (req, res) => {
     });
 });
 
+//---------------------------------------------------------------
 //@desc Verify Account Token
 //@route PUT /api/v1/users/verify-account/:verifyToken
 //@access private
+//---------------------------------------------------------------
 exports.verifyAccount = asyncHandler(async (req, res) => {
     const { verifyToken } = req.params;
 
@@ -497,3 +574,4 @@ exports.verifyAccount = asyncHandler(async (req, res) => {
         message: "Account verified successfully",
     });
 });
+

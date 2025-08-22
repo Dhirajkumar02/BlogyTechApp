@@ -3,18 +3,20 @@ require("dotenv").config();
 
 const express = require("express");
 const connectDB = require("./config/database");
+
+// Routers
 const usersRouter = require("./routes/users/usersRouter");
 const categoriesRouter = require("./routes/categories/categoriesRouter");
 const postsRouter = require("./routes/posts/postsRouter");
+const commentsRouter = require("./routes/comments/commentsRoute");
+
+// Middlewares
 const {
     notFound,
     globalErrorHandler,
 } = require("./middlewares/globalErrorHandler");
-const commentsRouter = require("./routes/comments/commentsRoute");
-const sendEmail = require("./utils/sendEmail");
 
 //! Create an express app
-//sendEmail("dhirajkumarsaah@gmail.com", "HellowWelcome123");
 const app = express();
 
 //! Establish connection to MongoDB
@@ -34,6 +36,7 @@ app.use("/api/v1/posts", postsRouter);
 
 //? Setup the Comment Router
 app.use("/api/v1/comments", commentsRouter);
+
 //? Not Found Error Handler
 app.use(notFound);
 
