@@ -8,7 +8,6 @@ const {
     sendAccountVerificationEmail,
 } = require("../../utils/emailService");
 
-
 //---------------------------------------------------------
 // @desc    Register new user
 // @route   POST /api/v1/users/register
@@ -119,82 +118,61 @@ exports.changePassword = asyncHandler(async (req, res) => {
     });
 });
 
-//---------------------------------------------------------
-// @desc    Forgot password (send reset link via email)
+//---------------------------------------------------------------
+// @desc    Forgot Password
 // @route   POST /api/v1/users/forgot-password
 // @access  Public
-//---------------------------------------------------------
+//---------------------------------------------------------------
 exports.forgotPassword = asyncHandler(async (req, res) => {
     const { email } = req.body;
-
-    // 1. Check if user exists
     const user = await User.findOne({ email });
-    if (!user) {
+    if (!user)
         return res
             .status(404)
             .json({ status: "failed", message: "User not found" });
-    }
 
-    // 2. Generate a reset token (raw token for email, hashed for DB)
-    const resetToken = crypto.randomBytes(32).toString("hex"); // raw token for email
+    const resetToken = crypto.randomBytes(32).toString("hex");
     const hashedToken = crypto
         .createHash("sha256")
         .update(resetToken)
-        .digest("hex"); // store hashed in DB
+        .digest("hex");
 
-    // 3. Save hashed token & expiry in DB
     user.passwordResetToken = hashedToken;
-    user.passwordResetExpires = Date.now() + 10 * 60 * 1000; // 10 minutes expiry
+    user.passwordResetExpires = Date.now() + 10 * 60 * 1000; // 10 min
     await user.save();
 
-    // 4. Create reset URL (send raw token in URL)
-    const resetUrl = `${req.protocol}://${req.get(
-        "host"
-    )}/api/v1/users/reset-password/${resetToken}`;
-
-    // 5. Email message
-    const message = `You requested a password reset.\n\nClick the link below to reset your password:\n\n${resetUrl}\n\nIf you did not request this, please ignore.`;
-
     try {
-        // 6. Send email
-        await sendResetPasswordEmail({
-            email: user.email,
-            subject: "Password Reset Request",
-            message,
-        });
-
+        await sendResetPasswordEmail(user.email, resetToken);
         res.json({
             status: "success",
-            message: "Password reset link sent to your email",
+            message: "Password reset link sent to email",
         });
-    } catch (err) {
-        // 7. If email fails → clear reset fields
+    } catch (error) {
         user.passwordResetToken = undefined;
         user.passwordResetExpires = undefined;
         await user.save();
-
         res
             .status(500)
             .json({ status: "failed", message: "Email could not be sent" });
     }
 });
 
-//---------------------------------------------------------
-// @desc    Reset password (via reset token)
-// @route   POST /api/v1/users/reset-password/:resetToken
+//---------------------------------------------------------------
+// @desc    Reset Password
+// @route   PUT /api/v1/users/reset-password/:resetToken
 // @access  Public
-//---------------------------------------------------------
+//---------------------------------------------------------------
 exports.resetPassword = asyncHandler(async (req, res) => {
     const { resetToken } = req.params;
     const { password } = req.body;
 
-    // 1. Hash the token from params to compare with DB
+    // 1. Hash the token from URL to compare with DB
     const hashedToken = crypto
         .createHash("sha256")
         .update(resetToken)
         .digest("hex");
 
-    // 2. Find user with valid token & expiry
+    // 2. Find user with matching token and valid expiry
     const user = await User.findOne({
         passwordResetToken: hashedToken,
         passwordResetExpires: { $gt: Date.now() }, // not expired
@@ -207,24 +185,20 @@ exports.resetPassword = asyncHandler(async (req, res) => {
         });
     }
 
-    // 3. Hash new password manually (safest)
-    const salt = await bcrypt.genSalt(10);
-    user.password = await bcrypt.hash(password, salt);
+    // 3. Assign new password (pre-save hook in User model will hash it)
+    user.password = password;
 
-    // 4. Clear reset fields
+    // 4. Clear reset token fields
     user.passwordResetToken = undefined;
     user.passwordResetExpires = undefined;
 
-    // 5. Save new password
+    // 5. Save user
     await user.save();
-
-    // 6. Optional: return JWT to auto-login user
-    // const token = generateToken(user._id); // if you use JWT
-    // res.json({ status: "success", token });
 
     res.json({
         status: "success",
-        message: "Password has been reset successfully",
+        message:
+            "Password has been reset successfully. Please login with new password.",
     });
 });
 
@@ -518,9 +492,9 @@ exports.unFollowingUser = asyncHandler(async (req, resp, next) => {
 });
 
 //---------------------------------------------------------------
-//@desc Account Verification Email
-//@route PUT /api/v1/users/account-verification-email
-//@access private
+// @desc    Send Account Verification Email
+// @route   PUT /api/v1/users/account-verification-email
+// @access  Private (user must be logged in)
 //---------------------------------------------------------------
 exports.accountVerificationEmail = asyncHandler(async (req, res) => {
     const currentUser = await User.findById(req.userAuth._id);
@@ -532,23 +506,27 @@ exports.accountVerificationEmail = asyncHandler(async (req, res) => {
     const verifyToken = currentUser.generateAccountVerificationToken();
     await currentUser.save();
 
-    // Send email
-    await sendAccountVerificationEmail(currentUser.email, verifyToken);
-
-    res.json({
-        status: "success",
-        message: `Verification email sent to ${currentUser.email}`,
-    });
+    try {
+        await sendAccountVerificationEmail(currentUser.email, verifyToken);
+        res.json({
+            status: "success",
+            message: `Verification email sent to ${currentUser.email}`,
+        });
+    } catch (error) {
+        console.error(error);
+        res
+            .status(500)
+            .json({ status: "failed", message: "Email could not be sent" });
+    }
 });
 
 //---------------------------------------------------------------
-//@desc Verify Account Token
-//@route PUT /api/v1/users/verify-account/:verifyToken
-//@access private
+// @desc    Verify Account Token
+// @route   PUT /api/v1/users/verify-account/:verifyToken
+// @access  Public
 //---------------------------------------------------------------
 exports.verifyAccount = asyncHandler(async (req, res) => {
     const { verifyToken } = req.params;
-
     const cryptoToken = crypto
         .createHash("sha256")
         .update(verifyToken)
@@ -574,4 +552,3 @@ exports.verifyAccount = asyncHandler(async (req, res) => {
         message: "Account verified successfully",
     });
 });
-
