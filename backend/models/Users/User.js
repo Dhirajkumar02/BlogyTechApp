@@ -2,17 +2,26 @@ const mongoose = require("mongoose");
 const bcrypt = require("bcryptjs");
 const crypto = require("crypto");
 
+const DEFAULT_PROFILE_PIC =
+    "https://res.cloudinary.com/demo/image/upload/v1691000000/default-profile.png";
+const DEFAULT_COVER_PHOTO =
+    "https://res.cloudinary.com/demo/image/upload/v1691000000/default-cover.jpg";
+
 const userSchema = new mongoose.Schema(
     {
         username: {
             type: String,
             required: true,
+            unique: true,
+            trim: true,
+            index: true,
         },
         email: {
             type: String,
             required: true,
             unique: true,
             lowercase: true,
+            index: true,
         },
         role: {
             type: String,
@@ -23,6 +32,7 @@ const userSchema = new mongoose.Schema(
             type: String,
             required: true,
             select: false, // hide by default
+            minlength: 6,
         },
         passwordChangedAt: Date,
         lastLogin: {
@@ -35,12 +45,12 @@ const userSchema = new mongoose.Schema(
         },
         isActive: {
             type: Boolean,
-            default: true
-        }, // for deactivate
+            default: true, // for deactivate
+        },
         isDeleted: {
             type: Boolean,
-            default: false
-        }, // for soft delete
+            default: false, // for soft delete
+        },
         accountLevel: {
             type: String,
             enum: ["bronze", "silver", "gold"],
@@ -48,15 +58,16 @@ const userSchema = new mongoose.Schema(
         },
         profilePic: {
             type: String,
-            default:
-                "https://res.cloudinary.com/demo/image/upload/v1691000000/default-profile.png",
+            default: DEFAULT_PROFILE_PIC,
         },
         coverPhoto: {
             type: String,
-            default:
-                "https://res.cloudinary.com/demo/image/upload/v1691000000/default-cover.jpg",
+            default: DEFAULT_COVER_PHOTO,
         },
-        bio: String,
+        bio: {
+            type: String,
+            maxlength: 250,
+        },
         location: String,
         notificationPreferences: {
             email: { type: Boolean, default: true },
@@ -67,6 +78,7 @@ const userSchema = new mongoose.Schema(
             type: String,
             enum: ["male", "female", "prefer not to say", "non-binary"],
         },
+
         // Relationships
         profileViewers: [{ type: mongoose.Schema.Types.ObjectId, ref: "User" }],
         followers: [{ type: mongoose.Schema.Types.ObjectId, ref: "User" }],
@@ -90,6 +102,36 @@ const userSchema = new mongoose.Schema(
     }
 );
 
+/* ----------------- Virtuals ----------------- */
+userSchema.virtual("fullName").get(function () {
+    return this.username; // agar tum firstname/lastname use karoge toh combine kar lena
+});
+
+// Auto filter soft-deleted users from queries
+userSchema.pre(/^find/, function (next) {
+    // "this" refers to the current query
+    this.find({ isDeleted: { $ne: true } });
+    next();
+});
+
+/* ----------------- Custom Static Methods ----------------- */
+userSchema.statics.softDeleteById = async function (id) {
+    return this.findByIdAndUpdate(
+        id,
+        { isDeleted: true, isActive: false },
+        { new: true }
+    );
+};
+
+userSchema.statics.restoreById = async function (id) {
+    return this.findByIdAndUpdate(
+        id,
+        { isDeleted: false, isActive: true },
+        { new: true }
+    );
+};
+
+/* ----------------- Middlewares ----------------- */
 // Hash password before saving
 userSchema.pre("save", async function (next) {
     if (!this.isModified("password")) return next();
@@ -99,9 +141,21 @@ userSchema.pre("save", async function (next) {
     next();
 });
 
+// 🔹 Pre middleware for all find queries
+userSchema.pre(/^find/, function (next) {
+    // Agar explicitly skipDeleted option pass kiya hai toh deleted bhi show ho
+    if (this.getOptions().skipDeleted) {
+        return next();
+    }
+    // Warna default me sirf non-deleted
+    this.find({ isDeleted: { $ne: true } });
+    next();
+});
+
+/* ----------------- Methods ----------------- */
 // Compare entered password with hashed password
 userSchema.methods.isPasswordMatch = async function (enteredPassword) {
-    return await bcrypt.compare(enteredPassword, this.password);
+    return bcrypt.compare(enteredPassword, this.password);
 };
 
 // Check if password was changed after JWT token was issued
@@ -138,7 +192,7 @@ userSchema.methods.generateAccountVerificationToken = function () {
     return verificationToken;
 };
 
-// Clean tokens after verification or reset
+// Clear tokens after verification or reset
 userSchema.methods.clearTokens = function () {
     this.passwordResetToken = undefined;
     this.passwordResetExpires = undefined;

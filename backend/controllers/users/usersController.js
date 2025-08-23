@@ -14,7 +14,8 @@ const {
 // @access  Public
 //---------------------------------------------------------
 exports.register = asyncHandler(async (req, res) => {
-    const { username, email, password } = req.body;
+    const { username, password } = req.body;
+    const email = req.body.email.toLowerCase();
 
     // Check if user already exists
     const userExists = await User.findOne({ email });
@@ -45,7 +46,8 @@ exports.register = asyncHandler(async (req, res) => {
 // @access  Public
 //---------------------------------------------------------
 exports.login = asyncHandler(async (req, res) => {
-    const { email, password } = req.body;
+    const email = req.body.email.toLowerCase();
+    const password = req.body;
 
     // Find user with password field
     const user = await User.findOne({ email }).select("+password");
@@ -493,7 +495,7 @@ exports.unFollowingUser = asyncHandler(async (req, resp, next) => {
 
 //---------------------------------------------------------------
 // @desc    Send Account Verification Email
-// @route   PUT /api/v1/users/account-verification-email
+// @route   POST /api/v1/users/account-verification-email
 // @access  Private (user must be logged in)
 //---------------------------------------------------------------
 exports.accountVerificationEmail = asyncHandler(async (req, res) => {
@@ -522,8 +524,8 @@ exports.accountVerificationEmail = asyncHandler(async (req, res) => {
 
 //---------------------------------------------------------------
 // @desc    Verify Account Token
-// @route   PUT /api/v1/users/verify-account/:verifyToken
-// @access  Public
+// @route   POST /api/v1/users/verify-account/:verifyToken
+// @access  Private
 //---------------------------------------------------------------
 exports.verifyAccount = asyncHandler(async (req, res) => {
     const { verifyToken } = req.params;

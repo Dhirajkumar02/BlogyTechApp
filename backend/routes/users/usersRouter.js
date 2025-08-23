@@ -1,5 +1,5 @@
 const express = require("express");
-const upload = require("../../utils/fileUpload")
+const upload = require("../../utils/fileUpload");
 const {
     register,
     login,
@@ -20,7 +20,6 @@ const {
     reactivateAccount,
 } = require("../../controllers/users/usersController");
 const isLoggedIn = require("../../middlewares/isLoggedIn");
-const { protect } = require("../../middlewares/isProtected");
 const isActiveUser = require("../../middlewares/isActiveUser");
 const usersRouter = express.Router();
 //!Register Route
@@ -41,10 +40,10 @@ usersRouter.put(
 );
 
 //!Password change route
-usersRouter.put("/change-password", protect, changePassword);
+usersRouter.put("/change-password", isLoggedIn, changePassword);
 
 //!Profile Route
-usersRouter.get("/profile/", isLoggedIn, getProfile);
+usersRouter.get("/profile", isLoggedIn, getProfile);
 
 //!Block User Route
 usersRouter.put("/block/:userIdToBlock", isLoggedIn, blockUser);
@@ -72,19 +71,22 @@ usersRouter.post("/forgot-password", forgotPassword);
 usersRouter.put("/reset-password/:resetToken", resetPassword);
 
 //!Send Account Verification Email route
-usersRouter.put("/account-verification-email", isLoggedIn, accountVerificationEmail);
+usersRouter.post(
+    "/account-verification-email",
+    isLoggedIn,
+    accountVerificationEmail
+);
 
 //! Account token Verification route
-usersRouter.put("/verify-account/:verifyToken", isLoggedIn, verifyAccount);
+usersRouter.post("/verify-account/:verifyToken", isLoggedIn, verifyAccount);
 
 //! Deactivate account (temporary)
-usersRouter.put("/deactivate", protect, isActiveUser, deactivateAccount);
+usersRouter.put("/deactivate", isLoggedIn, isActiveUser, deactivateAccount);
 
 //! Reactivate account
 usersRouter.put("/reactivate", isLoggedIn, reactivateAccount);
 
-
 //! Delete account (soft delete)
-usersRouter.delete("/delete-account", protect, isActiveUser, deleteAccount);
+usersRouter.delete("/delete-account", isLoggedIn, isActiveUser, deleteAccount);
 
 module.exports = usersRouter;

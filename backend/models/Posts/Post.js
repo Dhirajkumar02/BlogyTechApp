@@ -1,4 +1,5 @@
 const mongoose = require("mongoose");
+
 const postSchema = new mongoose.Schema(
     {
         title: {
@@ -39,6 +40,10 @@ const postSchema = new mongoose.Schema(
             type: Date,
             default: null,
         },
+        isPublished: {
+            type: Boolean,
+            default: false,
+        },
         likes: [
             {
                 type: mongoose.Schema.Types.ObjectId,
@@ -60,15 +65,24 @@ const postSchema = new mongoose.Schema(
     },
     {
         timestamps: true,
-        toJSON: {
-            virtuals: true,
-        },
-        toObject: {
-            virtuals: true,
-        },
+        toJSON: { virtuals: true },
+        toObject: { virtuals: true },
     }
 );
-//!Convert schema to model
 
+// ✅ Virtuals for counts
+postSchema.virtual("likesCount").get(function () {
+    return this.likes.length;
+});
+
+postSchema.virtual("dislikesCount").get(function () {
+    return this.dislikes.length;
+});
+
+postSchema.virtual("commentsCount").get(function () {
+    return this.comments.length;
+});
+
+//! Convert schema to model
 const Post = mongoose.model("Post", postSchema);
 module.exports = Post;
