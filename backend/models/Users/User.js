@@ -33,6 +33,14 @@ const userSchema = new mongoose.Schema(
             type: Boolean,
             default: false,
         },
+        isActive: {
+            type: Boolean,
+            default: true
+        }, // for deactivate
+        isDeleted: {
+            type: Boolean,
+            default: false
+        }, // for soft delete
         accountLevel: {
             type: String,
             enum: ["bronze", "silver", "gold"],

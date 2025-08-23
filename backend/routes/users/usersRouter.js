@@ -15,9 +15,13 @@ const {
     verifyAccount,
     updateProfile,
     changePassword,
+    deactivateAccount,
+    deleteAccount,
+    reactivateAccount,
 } = require("../../controllers/users/usersController");
 const isLoggedIn = require("../../middlewares/isLoggedIn");
 const { protect } = require("../../middlewares/isProtected");
+const isActiveUser = require("../../middlewares/isActiveUser");
 const usersRouter = express.Router();
 //!Register Route
 usersRouter.post("/register", register);
@@ -72,5 +76,15 @@ usersRouter.put("/account-verification-email", isLoggedIn, accountVerificationEm
 
 //! Account token Verification route
 usersRouter.put("/verify-account/:verifyToken", isLoggedIn, verifyAccount);
+
+//! Deactivate account (temporary)
+usersRouter.put("/deactivate", protect, isActiveUser, deactivateAccount);
+
+//! Reactivate account
+usersRouter.put("/reactivate", isLoggedIn, reactivateAccount);
+
+
+//! Delete account (soft delete)
+usersRouter.delete("/delete-account", protect, isActiveUser, deleteAccount);
 
 module.exports = usersRouter;

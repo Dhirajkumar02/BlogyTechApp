@@ -552,3 +552,79 @@ exports.verifyAccount = asyncHandler(async (req, res) => {
         message: "Account verified successfully",
     });
 });
+
+//---------------------------------------------------------
+// @desc Deactivate account (temporary)
+// @route PUT /api/v1/users/deactivate
+// @access Private
+//---------------------------------------------------------
+exports.deactivateAccount = asyncHandler(async (req, res) => {
+    const user = await User.findById(req.userAuth._id);
+    if (!user)
+        return res
+            .status(404)
+            .json({ status: "failed", message: "User not found" });
+
+    user.isActive = false;
+    await user.save();
+
+    res.json({
+        status: "success",
+        message: "Account deactivated successfully",
+    });
+});
+
+//---------------------------------------------------------
+// @desc Delete account (soft delete)
+// @route DELETE /api/v1/users/delete-account
+// @access Private
+//---------------------------------------------------------
+exports.deleteAccount = asyncHandler(async (req, res) => {
+    const user = await User.findById(req.userAuth._id);
+    if (!user)
+        return res
+            .status(404)
+            .json({ status: "failed", message: "User not found" });
+
+    user.isDeleted = true;
+    user.isActive = false; // deactivate as well
+    await user.save();
+
+    res.json({
+        status: "success",
+        message: "Account deleted successfully",
+    });
+});
+
+//-----------------------------------------------------------------
+// @desc    Reactivate user account
+// @route   PUT /api/v1/users/reactivate
+// @access  Private
+//-----------------------------------------------------------------
+exports.reactivateAccount = async (req, res) => {
+    try {
+        const user = await User.findByIdAndUpdate(
+            req.userAuth._id,
+            { isActive: true, isDeleted: false },
+            { new: true }
+        );
+
+        if (!user) {
+            return res.status(404).json({
+                status: "failed",
+                message: "User not found"
+            });
+        }
+
+        res.json({
+            status: "success",
+            message: "Account reactivated successfully",
+            user
+        });
+    } catch (error) {
+        res.status(500).json({
+            status: "error",
+            message: error.message
+        });
+    }
+};
