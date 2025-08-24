@@ -2,14 +2,12 @@ const jwt = require("jsonwebtoken");
 
 const generateToken = (user) => {
     const payLoad = {
-        id: user._id, // ✅ flatten the payload — no need to nest under `user`
+        id: user._id.toString(), // ensure string
     };
 
-    const token = jwt.sign(payLoad, process.env.JWT_SECRET_KEY, {
-        expiresIn: "1h", // ✅ More readable than 3600
+    return jwt.sign(payLoad, process.env.JWT_SECRET_KEY, {
+        expiresIn: "1h", // readable expiry
     });
-
-    return token;
 };
 
 module.exports = generateToken;

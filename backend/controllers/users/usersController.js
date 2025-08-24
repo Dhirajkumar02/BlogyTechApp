@@ -7,6 +7,8 @@ const {
     sendResetPasswordEmail,
     sendAccountVerificationEmail,
 } = require("../../utils/emailService");
+const mongoose = require("mongoose");
+const cloudinary = require("cloudinary").v2;
 
 //---------------------------------------------------------
 // @desc    Register new user
@@ -47,22 +49,26 @@ exports.register = asyncHandler(async (req, res) => {
 //---------------------------------------------------------
 exports.login = asyncHandler(async (req, res) => {
     const email = req.body.email.toLowerCase();
-    const password = req.body;
+    const password = req.body.password;
 
     // Find user with password field
     const user = await User.findOne({ email }).select("+password");
-    if (!user) {
-        return res
-            .status(401)
-            .json({ status: "failed", message: "Invalid credentials (email)" });
+
+    // Check if user exists or is deleted
+    if (!user || user.isDeleted) {
+        return res.status(401).json({
+            status: "failed",
+            message: "This account has been deleted. Please contact support.",
+        });
     }
 
     // Compare passwords
     const isMatched = await bcrypt.compare(password, user.password);
     if (!isMatched) {
-        return res
-            .status(401)
-            .json({ status: "failed", message: "Invalid credentials (password)" });
+        return res.status(401).json({
+            status: "failed",
+            message: "Invalid credentials (password)",
+        });
     }
 
     // Update last login
@@ -72,7 +78,7 @@ exports.login = asyncHandler(async (req, res) => {
     // Send response with token
     res.json({
         status: "success",
-        message: "Login successful",
+        message: "Login successfully",
         user: {
             _id: user._id,
             username: user.username,
@@ -89,7 +95,7 @@ exports.login = asyncHandler(async (req, res) => {
 // @access  Private
 //---------------------------------------------------------
 exports.changePassword = asyncHandler(async (req, res) => {
-    const userId = req.userAuth._id; // userAuth comes from authMiddleware
+    const userId = req.userAuth.id; // userAuth comes from authMiddleware
     const { oldPassword, newPassword } = req.body;
 
     // Find user
@@ -210,23 +216,56 @@ exports.resetPassword = asyncHandler(async (req, res) => {
 //@access private
 //-------------------------------------------------------------
 exports.updateProfile = asyncHandler(async (req, res) => {
-    const userId = req.userAuth._id;
+    const userId = req.userAuth.id;
+
+    // Check valid ObjectId
+    if (!mongoose.isValidObjectId(userId)) {
+        return res.status(400).json({
+            status: "failed",
+            message: "Invalid user ID",
+        });
+    }
+
     const { bio, location } = req.body;
-    let profilePic = req.userAuth.profilePic;
-    let coverPhoto = req.userAuth.coverPhoto;
 
-    if (req.files?.profilePic) {
-        profilePic = req.files.profilePic[0].path;
-    }
-    if (req.files?.coverPhoto) {
-        coverPhoto = req.files.coverPhoto[0].path;
+    // Current user from DB
+    const user = await User.findById(userId);
+    if (!user) {
+        return res.status(404).json({
+            status: "failed",
+            message: "User not found",
+        });
     }
 
-    const updatedUser = await User.findByIdAndUpdate(
-        userId,
-        { bio, location, profilePic, coverPhoto },
-        { new: true, runValidators: true }
-    ).select(
+    let newProfilePic = req.files?.profilePic
+        ? req.files.profilePic[0].path
+        : undefined;
+    let newCoverPhoto = req.files?.coverPhoto
+        ? req.files.coverPhoto[0].path
+        : undefined;
+
+    // Delete old profilePic if new one is uploaded and it's different
+    if (newProfilePic && user.profilePic && user.profilePic !== newProfilePic) {
+        const oldPublicId = user.profilePic.split("/").pop().split(".")[0]; // extract publicId
+        await cloudinary.uploader.destroy(`blogytech/${oldPublicId}`);
+    }
+
+    // Delete old coverPhoto if new one is uploaded and it's different
+    if (newCoverPhoto && user.coverPhoto && user.coverPhoto !== newCoverPhoto) {
+        const oldPublicId = user.coverPhoto.split("/").pop().split(".")[0];
+        await cloudinary.uploader.destroy(`blogytech/${oldPublicId}`);
+    }
+
+    // Prepare update fields
+    const updateFields = { bio, location };
+    if (newProfilePic) updateFields.profilePic = newProfilePic;
+    if (newCoverPhoto) updateFields.coverPhoto = newCoverPhoto;
+
+    // Update user
+    const updatedUser = await User.findByIdAndUpdate(userId, updateFields, {
+        new: true,
+        runValidators: true,
+    }).select(
         "username email role accountLevel profilePic coverPhoto bio location followers following posts createdAt"
     );
 
@@ -288,7 +327,7 @@ exports.blockUser = asyncHandler(async (req, resp) => {
         return;
     }
     // Get the current user id
-    const userBlocking = req?.userAuth?._id;
+    const userBlocking = req?.userAuth?.id;
 
     // Check if it is self blocking
     if (userIdToBlock.toString() === userBlocking.toString()) {
@@ -321,33 +360,58 @@ exports.blockUser = asyncHandler(async (req, resp) => {
 //@access private
 //---------------------------------------------------------------
 exports.unblockUser = asyncHandler(async (req, resp, next) => {
-    // Find the user to be unblocked
     const userIdToUnBlock = req.params.userIdToUnBlock;
+
+    // Validate target userId
+    if (!mongoose.isValidObjectId(userIdToUnBlock)) {
+        return resp.status(400).json({
+            status: "failed",
+            message: "Invalid user ID to unblock",
+        });
+    }
+
+    // Find the user to be unblocked
     const userToUnBlock = await User.findById(userIdToUnBlock);
     if (!userToUnBlock) {
-        let error = new Error("User to unblock not found");
-        next(error);
-        return;
+        return resp.status(404).json({
+            status: "failed",
+            message: "User to unblock not found",
+        });
     }
-    //Find the current user
-    const userUnBlocking = req?.userAuth?._id;
+
+    // Validate current user ID
+    const userUnBlocking = req?.userAuth?.id;
+    if (!mongoose.isValidObjectId(userUnBlocking)) {
+        return resp.status(400).json({
+            status: "failed",
+            message: "Invalid current user ID",
+        });
+    }
+
+    // Find the current user
     const currentUser = await User.findById(userUnBlocking);
-
-    //Check if the user to unblock is already blocked
-    if (!currentUser.blockedUsers.includes(userIdToUnBlock)) {
-        let error = new Error("User not blocked!");
-        next(error);
-        return;
+    if (!currentUser) {
+        return resp.status(404).json({
+            status: "failed",
+            message: "Current user not found",
+        });
     }
-    //Remove the user from the current user blockedUsers array
-    currentUser.blockedUsers = currentUser.blockedUsers.filter((id) => {
-        return id.toString() !== userIdToUnBlock;
-    });
 
-    //Update the database
+    // Check if user is blocked
+    if (!currentUser.blockedUsers.includes(userIdToUnBlock)) {
+        return resp.status(400).json({
+            status: "failed",
+            message: "User not blocked!",
+        });
+    }
+
+    // Remove from blockedUsers
+    currentUser.blockedUsers = currentUser.blockedUsers.filter(
+        (id) => id.toString() !== userIdToUnBlock
+    );
+
     await currentUser.save();
 
-    //return the response
     resp.json({
         status: "success",
         message: "User unblocked successfully",
@@ -397,7 +461,7 @@ exports.viewOtherProfile = asyncHandler(async (req, resp, next) => {
 //---------------------------------------------------------------
 exports.followingUser = asyncHandler(async (req, resp, next) => {
     //Find the current user id
-    const currentUserId = req?.userAuth?._id;
+    const currentUserId = req?.userAuth?.id;
 
     //Find the user to be followed
     const userIdToFollow = req.params.userIdToFollow;
@@ -442,7 +506,7 @@ exports.followingUser = asyncHandler(async (req, resp, next) => {
 //---------------------------------------------------------------
 exports.unFollowingUser = asyncHandler(async (req, resp, next) => {
     //Find the current user id
-    const currentUserId = req?.userAuth?._id;
+    const currentUserId = req?.userAuth?.id;
 
     //Find the user to be followed
     const userIdToUnFollow = req.params.userIdToUnFollow;
@@ -499,7 +563,7 @@ exports.unFollowingUser = asyncHandler(async (req, resp, next) => {
 // @access  Private (user must be logged in)
 //---------------------------------------------------------------
 exports.accountVerificationEmail = asyncHandler(async (req, res) => {
-    const currentUser = await User.findById(req.userAuth._id);
+    const currentUser = await User.findById(req.userAuth.id);
     if (!currentUser)
         return res
             .status(404)
@@ -561,11 +625,21 @@ exports.verifyAccount = asyncHandler(async (req, res) => {
 // @access Private
 //---------------------------------------------------------
 exports.deactivateAccount = asyncHandler(async (req, res) => {
-    const user = await User.findById(req.userAuth._id);
-    if (!user)
-        return res
-            .status(404)
-            .json({ status: "failed", message: "User not found" });
+    const user = await User.findById(req.userAuth.id);
+
+    if (!user) {
+        return res.status(404).json({
+            status: "failed",
+            message: "User not found",
+        });
+    }
+
+    if (user.isActive === false) {
+        return res.status(400).json({
+            status: "failed",
+            message: "Account is already deactivated",
+        });
+    }
 
     user.isActive = false;
     await user.save();
@@ -576,13 +650,45 @@ exports.deactivateAccount = asyncHandler(async (req, res) => {
     });
 });
 
+//-----------------------------------------------------------------
+// @desc    Reactivate user account
+// @route   PUT /api/v1/users/reactivate
+// @access  Private
+//-----------------------------------------------------------------
+exports.reactivateAccount = asyncHandler(async (req, res) => {
+    const user = await User.findById(req.userAuth.id);
+
+    if (!user) {
+        return res.status(404).json({
+            status: "failed",
+            message: "User not found",
+        });
+    }
+
+    // Already active
+    if (user.isActive === true) {
+        return res.status(400).json({
+            status: "failed",
+            message: "Account is already active",
+        });
+    }
+
+    user.isActive = true;
+    await user.save();
+
+    res.json({
+        status: "success",
+        message: "Account reactivated successfully",
+    });
+});
+
 //---------------------------------------------------------
 // @desc Delete account (soft delete)
 // @route DELETE /api/v1/users/delete-account
 // @access Private
 //---------------------------------------------------------
 exports.deleteAccount = asyncHandler(async (req, res) => {
-    const user = await User.findById(req.userAuth._id);
+    const user = await User.findById(req.userAuth.id);
     if (!user)
         return res
             .status(404)
@@ -597,36 +703,3 @@ exports.deleteAccount = asyncHandler(async (req, res) => {
         message: "Account deleted successfully",
     });
 });
-
-//-----------------------------------------------------------------
-// @desc    Reactivate user account
-// @route   PUT /api/v1/users/reactivate
-// @access  Private
-//-----------------------------------------------------------------
-exports.reactivateAccount = async (req, res) => {
-    try {
-        const user = await User.findByIdAndUpdate(
-            req.userAuth._id,
-            { isActive: true, isDeleted: false },
-            { new: true }
-        );
-
-        if (!user) {
-            return res.status(404).json({
-                status: "failed",
-                message: "User not found"
-            });
-        }
-
-        res.json({
-            status: "success",
-            message: "Account reactivated successfully",
-            user
-        });
-    } catch (error) {
-        res.status(500).json({
-            status: "error",
-            message: error.message
-        });
-    }
-};

@@ -20,7 +20,6 @@ const {
     reactivateAccount,
 } = require("../../controllers/users/usersController");
 const isLoggedIn = require("../../middlewares/isLoggedIn");
-const isActiveUser = require("../../middlewares/isActiveUser");
 const usersRouter = express.Router();
 //!Register Route
 usersRouter.post("/register", register);
@@ -81,12 +80,12 @@ usersRouter.post(
 usersRouter.post("/verify-account/:verifyToken", isLoggedIn, verifyAccount);
 
 //! Deactivate account (temporary)
-usersRouter.put("/deactivate", isLoggedIn, isActiveUser, deactivateAccount);
+usersRouter.put("/deactivate", isLoggedIn(true), deactivateAccount);
 
 //! Reactivate account
-usersRouter.put("/reactivate", isLoggedIn, reactivateAccount);
+usersRouter.put("/reactivate", isLoggedIn(true), reactivateAccount);
 
 //! Delete account (soft delete)
-usersRouter.delete("/delete-account", isLoggedIn, isActiveUser, deleteAccount);
+usersRouter.delete("/delete-account", isLoggedIn(true), deleteAccount);
 
 module.exports = usersRouter;

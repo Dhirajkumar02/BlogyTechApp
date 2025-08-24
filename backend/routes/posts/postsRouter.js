@@ -11,6 +11,7 @@ const {
     disLikePost,
     clapPost,
     schedulePost,
+    dislikePost,
 } = require("../../controllers/posts/postsController");
 const isLoggedIn = require("../../middlewares/isLoggedIn");
 const isAccountVerified = require("../../middlewares/isAccountVerified");
@@ -57,7 +58,7 @@ postsRouter.put("/like/:postId", isLoggedIn, likePost);
 //! Dislike a post
 // Route: PUT /api/v1/posts/dislike/:postId
 // Access: Private (user must be logged in)
-postsRouter.put("/dislike/:postId", isLoggedIn, disLikePost);
+postsRouter.put("/dislike/:postId", isLoggedIn, dislikePost);
 
 //! Clap a post
 // Route: PUT /api/v1/posts/claps/:postId
