@@ -107,12 +107,6 @@ userSchema.virtual("fullName").get(function () {
     return this.username; // agar tum firstname/lastname use karoge toh combine kar lena
 });
 
-// Auto filter soft-deleted users from queries
-userSchema.pre(/^find/, function (next) {
-    // "this" refers to the current query
-    this.find({ isDeleted: { $ne: true } });
-    next();
-});
 
 /* ----------------- Custom Static Methods ----------------- */
 userSchema.statics.softDeleteById = async function (id) {

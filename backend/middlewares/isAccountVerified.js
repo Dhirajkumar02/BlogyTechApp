@@ -2,6 +2,7 @@ const User = require("../models/Users/User");
 
 /**
  * Middleware to check if account is verified
+ * Should be used after isLoggedIn middleware
  */
 const isAccountVerified = async (req, res, next) => {
     try {
@@ -13,7 +14,18 @@ const isAccountVerified = async (req, res, next) => {
             });
         }
 
-        // 🔍 Fetch only isVerified field
+        // If isLoggedIn already provided isVerified, use that
+        if (typeof req.userAuth.isVerified !== "undefined") {
+            if (req.userAuth.isVerified) {
+                return next(); // ✅ Verified
+            }
+            return res.status(401).json({
+                status: "fail",
+                message: "Account not verified. Please verify your email.",
+            });
+        }
+
+        // 🔍 Otherwise, fetch from DB as fallback
         const currentUser = await User.findById(req.userAuth.id).select(
             "isVerified"
         );
@@ -25,12 +37,10 @@ const isAccountVerified = async (req, res, next) => {
             });
         }
 
-        // ✅ If verified → allow access
         if (currentUser.isVerified) {
             return next();
         }
 
-        // 🚫 If not verified
         return res.status(401).json({
             status: "fail",
             message: "Account not verified. Please verify your email.",

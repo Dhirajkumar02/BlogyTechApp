@@ -44,12 +44,12 @@ usersRouter.put("/reset-password/:resetToken", resetPassword);
 ============================ */
 
 // Get current user profile (Private)
-usersRouter.get("/profile", isLoggedIn, getProfile);
+usersRouter.get("/profile", isLoggedIn(), getProfile);
 
 // Update profile including profilePic and coverPhoto (Private)
 usersRouter.put(
     "/update-profile",
-    isLoggedIn,
+    isLoggedIn(),
     upload.fields([
         { name: "profilePic", maxCount: 1 },
         { name: "coverPhoto", maxCount: 1 },
@@ -58,26 +58,26 @@ usersRouter.put(
 );
 
 // Change password while logged in (Private)
-usersRouter.put("/change-password", isLoggedIn, changePassword);
+usersRouter.put("/change-password", isLoggedIn(), changePassword);
 
 // View another user profile (Private)
-usersRouter.get("/view-other-profile/:userId", isLoggedIn, viewOtherProfile);
+usersRouter.get("/view-other-profile/:userId", isLoggedIn(), viewOtherProfile);
 
 /* ============================
        SOCIAL INTERACTIONS
 ============================ */
 
 // Follow a user (Private)
-usersRouter.put("/follow/:userId", isLoggedIn, followingUser);
+usersRouter.put("/follow/:userId", isLoggedIn(), followingUser);
 
 // Unfollow a user (Private)
-usersRouter.put("/unfollow/:userId", isLoggedIn, unFollowingUser);
+usersRouter.put("/unfollow/:userId", isLoggedIn(), unFollowingUser);
 
 // Block a user (Private)
-usersRouter.put("/block/:userId", isLoggedIn, blockUser);
+usersRouter.put("/block/:userId", isLoggedIn(), blockUser);
 
 // Unblock a user (Private)
-usersRouter.put("/unblock/:userId", isLoggedIn, unblockUser);
+usersRouter.put("/unblock/:userId", isLoggedIn(), unblockUser);
 
 /* ============================
        ACCOUNT MANAGEMENT
@@ -86,7 +86,7 @@ usersRouter.put("/unblock/:userId", isLoggedIn, unblockUser);
 // Send account verification email (Private)
 usersRouter.post(
     "/account-verification-email",
-    isLoggedIn,
+    isLoggedIn(),
     accountVerificationEmail
 );
 
@@ -94,12 +94,12 @@ usersRouter.post(
 usersRouter.post("/verify-account/:verifyToken", verifyAccount);
 
 // Deactivate account temporarily (Private)
-usersRouter.put("/deactivate", isLoggedIn, deactivateAccount);
+usersRouter.put("/deactivate", isLoggedIn(), deactivateAccount);
 
 // Reactivate account (Private)
-usersRouter.put("/reactivate", isLoggedIn, reactivateAccount);
+usersRouter.put("/reactivate", isLoggedIn(), reactivateAccount);
 
 // Soft delete account (Private)
-usersRouter.delete("/delete-account", isLoggedIn, deleteAccount);
+usersRouter.delete("/delete-account", isLoggedIn(), deleteAccount);
 
 module.exports = usersRouter;
