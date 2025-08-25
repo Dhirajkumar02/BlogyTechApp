@@ -21,17 +21,17 @@ exports.createPost = asyncHandler(async (req, res) => {
         title,
         content,
         category: categoryId,
-        author: req.userAuth._id, // Author from logged-in user
+        author: req.userAuth.id, // ✅ author id from logged-in user
         image: req.file?.path || null, // optional image
     });
 
     // Add post to user's posts array
-    await User.findByIdAndUpdate(req.userAuth._id, {
-        $push: { posts: post._id },
+    await User.findByIdAndUpdate(req.userAuth.id, {
+        $push: { posts: post.id },
     });
 
     // Add post to category's posts array
-    await Category.findByIdAndUpdate(categoryId, { $push: { posts: post._id } });
+    await Category.findByIdAndUpdate(categoryId, { $push: { posts: post.id } });
 
     res.status(201).json({
         status: "success",
@@ -44,7 +44,7 @@ exports.createPost = asyncHandler(async (req, res) => {
 //@route GET /api/v1/posts
 //@access private
 exports.getAllPosts = asyncHandler(async (req, res) => {
-    const currentUserId = req.userAuth._id;
+    const currentUserId = req.userAuth.id;
     const currentDateTime = new Date();
 
     // Get users who blocked current user
@@ -123,7 +123,7 @@ exports.deletePost = asyncHandler(async (req, res) => {
 //@access private
 exports.likePost = asyncHandler(async (req, res) => {
     const { postId } = req.params;
-    const userId = req.userAuth._id;
+    const userId = req.userAuth.id;
 
     const post = await Post.findById(postId);
     if (!post) throw new Error("Post not found");
@@ -144,7 +144,7 @@ exports.likePost = asyncHandler(async (req, res) => {
 //@access private
 exports.dislikePost = asyncHandler(async (req, res) => {
     const { postId } = req.params;
-    const userId = req.userAuth._id;
+    const userId = req.userAuth.id;
 
     const post = await Post.findById(postId);
     if (!post) throw new Error("Post not found");
@@ -193,7 +193,7 @@ exports.schedulePost = asyncHandler(async (req, res) => {
     if (!post) throw new Error("Post not found");
 
     // Ensure only author can schedule
-    if (post.author.toString() !== req.userAuth._id.toString()) {
+    if (post.author.toString() !== req.userAuth.id.toString()) {
         res.status(403);
         throw new Error("You can schedule only your own post");
     }

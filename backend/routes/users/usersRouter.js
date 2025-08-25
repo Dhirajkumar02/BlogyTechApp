@@ -20,14 +20,33 @@ const {
     reactivateAccount,
 } = require("../../controllers/users/usersController");
 const isLoggedIn = require("../../middlewares/isLoggedIn");
+
 const usersRouter = express.Router();
-//!Register Route
+
+/* ============================
+        AUTH ROUTES
+============================ */
+
+// Register a new user (Public)
 usersRouter.post("/register", register);
 
-//!Login Route
+// Login user (Public)
 usersRouter.post("/login", login);
 
-//! update profile with images route
+// Forgot password (Public)
+usersRouter.post("/forgot-password", forgotPassword);
+
+// Reset password with token (Public)
+usersRouter.put("/reset-password/:resetToken", resetPassword);
+
+/* ============================
+       PROFILE ROUTES
+============================ */
+
+// Get current user profile (Private)
+usersRouter.get("/profile", isLoggedIn, getProfile);
+
+// Update profile including profilePic and coverPhoto (Private)
 usersRouter.put(
     "/update-profile",
     isLoggedIn,
@@ -38,54 +57,49 @@ usersRouter.put(
     updateProfile
 );
 
-//!Password change route
+// Change password while logged in (Private)
 usersRouter.put("/change-password", isLoggedIn, changePassword);
 
-//!Profile Route
-usersRouter.get("/profile", isLoggedIn, getProfile);
+// View another user profile (Private)
+usersRouter.get("/view-other-profile/:userId", isLoggedIn, viewOtherProfile);
 
-//!Block User Route
-usersRouter.put("/block/:userIdToBlock", isLoggedIn, blockUser);
+/* ============================
+       SOCIAL INTERACTIONS
+============================ */
 
-//!UnBlock User Route
-usersRouter.put("/unblock/:userIdToUnBlock", isLoggedIn, unblockUser);
+// Follow a user (Private)
+usersRouter.put("/follow/:userId", isLoggedIn, followingUser);
 
-//!View another profile user Route
-usersRouter.get(
-    "/view-other-profile/:userProfileId",
-    isLoggedIn,
-    viewOtherProfile
-);
+// Unfollow a user (Private)
+usersRouter.put("/unfollow/:userId", isLoggedIn, unFollowingUser);
 
-//!Follow a user Route
-usersRouter.put("/following/:userIdToFollow", isLoggedIn, followingUser);
+// Block a user (Private)
+usersRouter.put("/block/:userId", isLoggedIn, blockUser);
 
-//!UnFollow a user Route
-usersRouter.put("/unfollowing/:userIdToUnFollow", isLoggedIn, unFollowingUser);
+// Unblock a user (Private)
+usersRouter.put("/unblock/:userId", isLoggedIn, unblockUser);
 
-//!Forgot password route
-usersRouter.post("/forgot-password", forgotPassword);
+/* ============================
+       ACCOUNT MANAGEMENT
+============================ */
 
-//!Reset password route
-usersRouter.put("/reset-password/:resetToken", resetPassword);
-
-//!Send Account Verification Email route
+// Send account verification email (Private)
 usersRouter.post(
     "/account-verification-email",
     isLoggedIn,
     accountVerificationEmail
 );
 
-//! Account token Verification route
-usersRouter.post("/verify-account/:verifyToken", isLoggedIn, verifyAccount);
+// Verify account token (Public, no login required)
+usersRouter.post("/verify-account/:verifyToken", verifyAccount);
 
-//! Deactivate account (temporary)
-usersRouter.put("/deactivate", isLoggedIn(true), deactivateAccount);
+// Deactivate account temporarily (Private)
+usersRouter.put("/deactivate", isLoggedIn, deactivateAccount);
 
-//! Reactivate account
-usersRouter.put("/reactivate", isLoggedIn(true), reactivateAccount);
+// Reactivate account (Private)
+usersRouter.put("/reactivate", isLoggedIn, reactivateAccount);
 
-//! Delete account (soft delete)
-usersRouter.delete("/delete-account", isLoggedIn(true), deleteAccount);
+// Soft delete account (Private)
+usersRouter.delete("/delete-account", isLoggedIn, deleteAccount);
 
 module.exports = usersRouter;

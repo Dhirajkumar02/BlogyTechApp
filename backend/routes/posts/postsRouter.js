@@ -24,7 +24,7 @@ const upload = multer({ storage });
 // Access: Private (user must be logged in and account verified)
 postsRouter.post(
     "/",
-    isLoggedIn,
+    isLoggedIn(true),
     isAccountVerified,
     upload.single("file"),
     createPost
@@ -33,7 +33,7 @@ postsRouter.post(
 //! Fetch all posts
 // Route: GET /api/v1/posts
 // Access: Private (user must be logged in and account verified)
-postsRouter.get("/", isLoggedIn, isAccountVerified, getAllPosts);
+postsRouter.get("/", isLoggedIn(true), isAccountVerified, getAllPosts);
 
 //! Fetch single post by ID
 // Route: GET /api/v1/posts/:id
@@ -43,12 +43,12 @@ postsRouter.get("/:id", getSinglePost);
 //! Delete a post by ID
 // Route: DELETE /api/v1/posts/:id
 // Access: Private (user must be logged in)
-postsRouter.delete("/:id", isLoggedIn, deletePost);
+postsRouter.delete("/:id", isLoggedIn(true), deletePost);
 
 //! Update a post by ID
 // Route: PUT /api/v1/posts/:id
 // Access: Private (user must be logged in)
-postsRouter.put("/:id", isLoggedIn, updatePost);
+postsRouter.put("/:id", isLoggedIn(true), updatePost);
 
 //! Like a post
 // Route: PUT /api/v1/posts/like/:postId
