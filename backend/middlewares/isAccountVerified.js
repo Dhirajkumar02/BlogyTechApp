@@ -20,8 +20,8 @@ const isAccountVerified = async (req, res, next) => {
                 return next(); // ✅ Verified
             }
             return res.status(401).json({
-                status: "fail",
-                message: "Account not verified. Please verify your email.",
+                status: "failed",
+                message: "Your account not verified. Please verify your email.",
             });
         }
 
@@ -32,7 +32,7 @@ const isAccountVerified = async (req, res, next) => {
 
         if (!currentUser) {
             return res.status(404).json({
-                status: "fail",
+                status: "failed",
                 message: "User not found",
             });
         }
@@ -42,8 +42,8 @@ const isAccountVerified = async (req, res, next) => {
         }
 
         return res.status(401).json({
-            status: "fail",
-            message: "Account not verified. Please verify your email.",
+            status: "failed",
+            message: "Your account not verified. Please verify your email.",
         });
     } catch (error) {
         console.error("isAccountVerified error:", error.message);

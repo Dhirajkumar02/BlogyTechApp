@@ -1,6 +1,7 @@
 const mongoose = require("mongoose");
 const bcrypt = require("bcryptjs");
 const crypto = require("crypto");
+const { type } = require("os");
 
 const DEFAULT_PROFILE_PIC =
     "https://res.cloudinary.com/demo/image/upload/v1691000000/default-profile.png";
@@ -11,28 +12,28 @@ const userSchema = new mongoose.Schema(
     {
         username: {
             type: String,
-            required: true,
+            required: [true, "Username is required"],
             unique: true,
             trim: true,
             index: true,
         },
         email: {
             type: String,
-            required: true,
+            required: [true, "Email is required"],
             unique: true,
             lowercase: true,
             index: true,
+        },
+        password: {
+            type: String,
+            required: [true, "Password is required"],
+            select: false, // hide by default
+            minlength: 6,
         },
         role: {
             type: String,
             enum: ["user", "admin"],
             default: "user",
-        },
-        password: {
-            type: String,
-            required: true,
-            select: false, // hide by default
-            minlength: 6,
         },
         passwordChangedAt: Date,
         lastLogin: {
@@ -45,11 +46,21 @@ const userSchema = new mongoose.Schema(
         },
         isActive: {
             type: Boolean,
-            default: true, // for deactivate
+            default: true, // It will become false when the user deactivates it
         },
         isDeleted: {
             type: Boolean,
-            default: false, // for soft delete
+            default: false, // If account deleted
+        },
+
+        // 🔹 Reactivation fields
+        reactivateOTP: {
+            type: String,
+            default: null,
+        },
+        otpExpires: {
+            type: Date,
+            default: null,
         },
         accountLevel: {
             type: String,
@@ -106,7 +117,6 @@ const userSchema = new mongoose.Schema(
 userSchema.virtual("fullName").get(function () {
     return this.username; // agar tum firstname/lastname use karoge toh combine kar lena
 });
-
 
 /* ----------------- Custom Static Methods ----------------- */
 userSchema.statics.softDeleteById = async function (id) {

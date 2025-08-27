@@ -9,7 +9,10 @@ const generateToken = require("../../utils/generateToken");
 const {
     sendResetPasswordEmail,
     sendAccountVerificationEmail,
+    sendAccountReactivationEmail,
+    sendAccountRestoreEmail,
 } = require("../../utils/emailService");
+const generateOTP = require("../../utils/generateOTP");
 
 /* =========================================
                 AUTHENTICATION
@@ -67,36 +70,46 @@ exports.login = asyncHandler(async (req, res) => {
 
     // Find user including password
     const user = await User.findOne({ email }).select("+password");
+
     if (!user) {
-        return res
-            .status(401)
-            .json({ status: "failed", message: "Invalid credentials" });
+        return res.status(401).json({
+            status: "failed",
+            message: "Invalid credentials. Please check your email.",
+        });
     }
 
-    // Status checks
+    // Check if account is deleted
     if (user.isDeleted) {
-        return res
-            .status(403)
-            .json({ status: "failed", message: "Account has been deleted" });
+        return res.status(403).json({
+            status: "failed",
+            message:
+                "This account has been deleted. Please restore your account via OTP or contact support.",
+        });
     }
+
+    // Check if account is inactive
     if (!user.isActive) {
-        return res
-            .status(403)
-            .json({ status: "failed", message: "Account is not active" });
+        return res.status(403).json({
+            status: "failed",
+            message:
+                "Your account is inactive. Please reactivate via OTP or contact support.",
+        });
     }
 
     // Compare password
     const isMatched = await bcrypt.compare(password, user.password);
     if (!isMatched) {
-        return res
-            .status(401)
-            .json({ status: "failed", message: "Invalid credentials" });
+        return res.status(401).json({
+            status: "failed",
+            message: "Invalid credentials. Please check your password.",
+        });
     }
 
-    // Update last login and save
+    // Update last login
     user.lastLogin = new Date();
     await user.save();
 
+    // Respond with JWT token
     return res.json({
         status: "success",
         message: "Login successful",
@@ -105,7 +118,7 @@ exports.login = asyncHandler(async (req, res) => {
             username: user.username,
             email: user.email,
             role: user.role,
-            token: generateToken(user), // signs JWT from user _id, etc.
+            token: generateToken(user), // JWT token
         },
     });
 });
@@ -333,7 +346,7 @@ exports.updateProfile = asyncHandler(async (req, res) => {
 //---------------------------------------------------------------
 exports.followingUser = asyncHandler(async (req, res) => {
     const currentUserId = req.userAuth?.id;
-    const userIdToFollow = (req.params.userId || "");
+    const userIdToFollow = req.params.userId || "";
 
     if (!mongoose.isValidObjectId(userIdToFollow)) {
         return res
@@ -370,7 +383,7 @@ exports.followingUser = asyncHandler(async (req, res) => {
 //---------------------------------------------------------------
 exports.unFollowingUser = asyncHandler(async (req, res) => {
     const currentUserId = req.userAuth?.id;
-    const userIdToUnFollow = (req.params.userId || "");
+    const userIdToUnFollow = req.params.userId || "";
 
     if (!mongoose.isValidObjectId(userIdToUnFollow)) {
         return res
@@ -403,7 +416,7 @@ exports.unFollowingUser = asyncHandler(async (req, res) => {
 //---------------------------------------------------------------
 exports.blockUser = asyncHandler(async (req, res) => {
     const currentUserId = req.userAuth?.id;
-    const userIdToBlock = (req.params.userId || "");
+    const userIdToBlock = req.params.userId || "";
 
     if (!mongoose.isValidObjectId(userIdToBlock)) {
         return res
@@ -443,7 +456,7 @@ exports.blockUser = asyncHandler(async (req, res) => {
 //---------------------------------------------------------------
 exports.unblockUser = asyncHandler(async (req, res) => {
     const currentUserId = req.userAuth?.id;
-    const userIdToUnBlock = (req.params.userId || "");
+    const userIdToUnBlock = req.params.userId || "";
 
     if (!mongoose.isValidObjectId(userIdToUnBlock)) {
         return res
@@ -458,6 +471,49 @@ exports.unblockUser = asyncHandler(async (req, res) => {
     return res.json({
         status: "success",
         message: "User unblocked successfully",
+    });
+});
+
+/* =========================================
+            VIEW OTHER PROFILE
+========================================= */
+
+//---------------------------------------------------------------
+// @desc    View another user's profile (track unique viewers)
+// @route   GET /api/v1/users/view-other-profile/:userProfileId
+// @access  Private (isLoggedIn)
+//---------------------------------------------------------------
+exports.viewOtherProfile = asyncHandler(async (req, res) => {
+    const currentUserId = req.userAuth?.id;
+    const userProfileId = req.params.userId || "";
+
+    if (!mongoose.isValidObjectId(userProfileId)) {
+        return res
+            .status(400)
+            .json({ status: "failed", message: "Invalid user id" });
+    }
+
+    const userProfile = await User.findById(userProfileId);
+    if (!userProfile) {
+        return res
+            .status(404)
+            .json({ status: "failed", message: "User not found" });
+    }
+
+    // Track profile viewers (unique)
+    const alreadyViewed = userProfile.profileViewers?.some(
+        (id) => id.toString() === currentUserId
+    );
+    if (!alreadyViewed) {
+        userProfile.profileViewers = userProfile.profileViewers || [];
+        userProfile.profileViewers.push(currentUserId);
+        await userProfile.save();
+    }
+
+    return res.json({
+        status: "success",
+        message: "Profile viewed successfully",
+        profile: userProfile,
     });
 });
 
@@ -528,7 +584,7 @@ exports.verifyAccount = asyncHandler(async (req, res) => {
 
     return res.json({
         status: "success",
-        message: "Account verified successfully",
+        message: "Your account verified successfully.",
     });
 });
 
@@ -546,9 +602,10 @@ exports.deactivateAccount = asyncHandler(async (req, res) => {
     }
 
     if (!user.isActive) {
-        return res
-            .status(400)
-            .json({ status: "failed", message: "Account already deactivated" });
+        return res.status(400).json({
+            status: "failed",
+            message: "Your account is already deactivated.",
+        });
     }
 
     user.isActive = false;
@@ -556,7 +613,7 @@ exports.deactivateAccount = asyncHandler(async (req, res) => {
 
     return res.json({
         status: "success",
-        message: "Account deactivated successfully",
+        message: "Your account is deactivated successfully.",
     });
 });
 
@@ -565,46 +622,46 @@ exports.deactivateAccount = asyncHandler(async (req, res) => {
 // @route   PUT /api/v1/users/reactivate
 // @access  Private (isLoggedIn)
 //---------------------------------------------------------------
-exports.reactivateAccount = asyncHandler(async (req, res) => {
-    const user = await User.findById(req.userAuth?.id);
-    if (!user) {
-        return res
-            .status(404)
-            .json({ status: "failed", message: "User not found" });
-    }
+// exports.reactivateAccount = asyncHandler(async (req, res) => {
+//     const user = await User.findById(req.userAuth?.id);
+//     if (!user) {
+//         return res
+//             .status(404)
+//             .json({ status: "failed", message: "User not found" });
+//     }
 
-    // Already active
-    if (user.isActive) {
-        return res
-            .status(400)
-            .json({ status: "failed", message: "Account already active" });
-    }
+//     // Already active
+//     if (user.isActive) {
+//         return res
+//             .status(400)
+//             .json({ status: "failed", message: "Account already active" });
+//     }
 
-    // If soft-deleted, optional restore window (30 days)
-    if (user.isDeleted) {
-        const deletedAt = user.deletedAt || user.updatedAt || new Date();
-        const daysSinceDeleted =
-            (Date.now() - new Date(deletedAt).getTime()) / (1000 * 60 * 60 * 24);
+//     // If soft-deleted, optional restore window (30 days)
+//     if (user.isDeleted) {
+//         const deletedAt = user.deletedAt || user.updatedAt || new Date();
+//         const daysSinceDeleted =
+//             (Date.now() - new Date(deletedAt).getTime()) / (1000 * 60 * 60 * 24);
 
-        if (daysSinceDeleted > 30) {
-            return res.status(403).json({
-                status: "failed",
-                message:
-                    "This account was deleted more than 30 days ago. Please contact support.",
-            });
-        }
+//         if (daysSinceDeleted > 30) {
+//             return res.status(403).json({
+//                 status: "failed",
+//                 message:
+//                     "This account was deleted more than 30 days ago. Please contact support.",
+//             });
+//         }
 
-        user.isDeleted = false;
-    }
+//         user.isDeleted = false;
+//     }
 
-    user.isActive = true;
-    await user.save();
+//     user.isActive = true;
+//     await user.save();
 
-    return res.json({
-        status: "success",
-        message: "Account reactivated successfully",
-    });
-});
+//     return res.json({
+//         status: "success",
+//         message: "Account reactivated successfully",
+//     });
+// });
 
 //---------------------------------------------------------------
 // @desc    Delete Account (soft delete)
@@ -622,53 +679,112 @@ exports.deleteAccount = asyncHandler(async (req, res) => {
     user.isDeleted = true;
     user.isActive = false;
     user.deletedAt = Date.now();
+
     await user.save();
 
     return res.json({
         status: "success",
-        message: "Account deleted successfully",
+        message:
+            "Your account deleted successfully. You can restore it anytime via OTP.",
     });
 });
 
-/* =========================================
-            VIEW OTHER PROFILE
-========================================= */
-
 //---------------------------------------------------------------
-// @desc    View another user's profile (track unique viewers)
-// @route   GET /api/v1/users/view-other-profile/:userProfileId
-// @access  Private (isLoggedIn)
+// @desc    Request OTP for Reactivate / Restore
+// @route   POST /api/v1/users/request-otp
+// @access  Public
 //---------------------------------------------------------------
-exports.viewOtherProfile = asyncHandler(async (req, res) => {
-    const currentUserId = req.userAuth?.id;
-    const userProfileId = (req.params.userId || "");
+exports.requestOtp = asyncHandler(async (req, res) => {
+    const email = (req.body.email || "").toLowerCase();
 
-    if (!mongoose.isValidObjectId(userProfileId)) {
-        return res
-            .status(400)
-            .json({ status: "failed", message: "Invalid user id" });
+    // Find user (active or deleted)
+    const user = await User.findOne({ email });
+    if (!user) {
+        return res.status(404).json({
+            status: "failed",
+            message: "User not found",
+        });
     }
 
-    const userProfile = await User.findById(userProfileId);
-    if (!userProfile) {
-        return res
-            .status(404)
-            .json({ status: "failed", message: "User not found" });
+    if (user.isActive && !user.isDeleted) {
+        return res.status(400).json({
+            status: "failed",
+            message: "Account is already active",
+        });
     }
 
-    // Track profile viewers (unique)
-    const alreadyViewed = userProfile.profileViewers?.some(
-        (id) => id.toString() === currentUserId
-    );
-    if (!alreadyViewed) {
-        userProfile.profileViewers = userProfile.profileViewers || [];
-        userProfile.profileViewers.push(currentUserId);
-        await userProfile.save();
+    // Generate OTP
+    const otp = generateOTP(); // utils/generateOTP.js
+    user.reactivateOTP = otp;
+    user.otpExpires = Date.now() + 10 * 60 * 1000; // 10 min
+    await user.save();
+
+    // Send email
+    if (user.isDeleted) {
+        await sendAccountRestoreEmail(user.email, otp); // deleted → restore
+    } else {
+        await sendAccountReactivationEmail(user.email, otp); // inactive → reactivate
     }
 
     return res.json({
         status: "success",
-        message: "Profile viewed successfully",
-        profile: userProfile,
+        message: "OTP sent to your registered email",
+    });
+});
+
+//---------------------------------------------------------------
+// @desc    Verify OTP & Reactivate / Restore
+// @route   POST /api/v1/users/verify-otp
+// @access  Public
+//---------------------------------------------------------------
+exports.verifyOtp = asyncHandler(async (req, res) => {
+    const { email, otp } = req.body;
+    const emailLower = (email || "").toLowerCase();
+
+    const user = await User.findOne({ email: emailLower });
+    if (!user) {
+        return res.status(404).json({
+            status: "failed",
+            message: "User not found",
+        });
+    }
+
+    if (!user.reactivateOTP || !user.otpExpires) {
+        return res.status(400).json({
+            status: "failed",
+            message: "OTP request not found! Please request OTP first.",
+        });
+    }
+
+    if (Date.now() > user.otpExpires) {
+        return res.status(400).json({
+            status: "failed",
+            message: "OTP expired. Please request a new one.",
+        });
+    }
+
+    if (otp !== user.reactivateOTP) {
+        return res.status(400).json({
+            status: "failed",
+            message: "Invalid OTP",
+        });
+    }
+
+    // Activate / Restore Account
+    user.isActive = true;
+    if (user.isDeleted) {
+        user.isDeleted = false;
+        user.deletedAt = null;
+    }
+
+    user.reactivateOTP = undefined;
+    user.otpExpires = undefined;
+    await user.save();
+
+    return res.json({
+        status: "success",
+        message: user.isDeleted
+            ? "Account restored successfully. You can now log in."
+            : "Account reactivated successfully. You can now log in.",
     });
 });

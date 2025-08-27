@@ -18,6 +18,15 @@ const {
     deactivateAccount,
     deleteAccount,
     reactivateAccount,
+    reactivateRequest,
+    reactivateVerify,
+    AccountReactivationEmail,
+    verifyReactivationAccount,
+    accountRestoreEmail,
+    accountReactivationEmail,
+    verifyRestoreAccount,
+    requestOtp,
+    verifyOtp,
 } = require("../../controllers/users/usersController");
 const isLoggedIn = require("../../middlewares/isLoggedIn");
 
@@ -96,10 +105,13 @@ usersRouter.post("/verify-account/:verifyToken", verifyAccount);
 // Deactivate account temporarily (Private)
 usersRouter.put("/deactivate", isLoggedIn(), deactivateAccount);
 
-// Reactivate account (Private)
-usersRouter.put("/reactivate", isLoggedIn(), reactivateAccount);
-
 // Soft delete account (Private)
 usersRouter.delete("/delete-account", isLoggedIn(), deleteAccount);
+
+// Request OTP for Reactivate / Restore (send OTP to email)
+usersRouter.post("/request-otp", requestOtp);
+
+// Verify OTP & Reactivate / Restore
+usersRouter.post("/verify-otp", verifyOtp);
 
 module.exports = usersRouter;

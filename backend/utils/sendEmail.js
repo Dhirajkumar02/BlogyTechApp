@@ -1,4 +1,3 @@
-// utils/sendEmail.js
 const nodemailer = require("nodemailer");
 const dotenv = require("dotenv");
 
@@ -25,10 +24,10 @@ const sendEmail = async ({ to, subject, html, text }) => {
         };
 
         const info = await transport.sendMail(message);
-        console.log("✅ Email sent:", info.messageId);
+        console.log("Email sent:", info.messageId);
         return info;
     } catch (error) {
-        console.error("❌ Email error:", error);
+        console.error("Email error:", error);
         throw new Error("Email sending failed");
     }
 };

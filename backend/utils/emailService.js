@@ -1,5 +1,6 @@
 const nodemailer = require("nodemailer");
 const dotenv = require("dotenv");
+const { sendRestoreOtp } = require("../controllers/users/usersController");
 
 dotenv.config(); // Load .env variables
 
@@ -66,16 +67,31 @@ const sendAccountVerificationEmail = async (to, verificationToken) => {
  * @param {string} to - recipient email
  * @param {string} otpCode - OTP code
  */
-const sendOtpEmail = async (to, otpCode) => {
+const sendAccountReactivationEmail = async (to, otpCode) => {
+    const otp = `${otpCode}`;
     const message = {
         from: `"Teczeon Support" <${process.env.GMAIL_USER}>`,
         to,
-        subject: "Your OTP Code",
-        html: `
-            <p>Your OTP code is:</p>
-            <h2>${otpCode}</h2>
-            <p>This code will expire in 5 minutes.</p>
-        `,
+        subject: "Account Reactivation OTP",
+        html: `<p>Your OTP for account reactivation is <b>${otp}</b>.</p>
+         <p>It will expire in 10 minutes.</p>`,
+    };
+    await transport.sendMail(message);
+};
+
+/**
+ * Send OTP Email
+ * @param {string} to - recipient email
+ * @param {string} otpCode - OTP code
+ */
+const sendAccountRestoreEmail = async (to, otpCode) => {
+    const otp = `${otpCode}`;
+    const message = {
+        from: `"Teczeon Support" <${process.env.GMAIL_USER}>`,
+        to,
+        subject: "Restore your account - OTP Verification",
+        html: `<p>Your OTP to restore your account is: <b>${otp}</b></p>
+           <p>It will expire in 10 minutes.</p>`,
     };
     await transport.sendMail(message);
 };
@@ -83,5 +99,6 @@ const sendOtpEmail = async (to, otpCode) => {
 module.exports = {
     sendResetPasswordEmail,
     sendAccountVerificationEmail,
-    sendOtpEmail,
+    sendAccountReactivationEmail,
+    sendAccountRestoreEmail,
 };
