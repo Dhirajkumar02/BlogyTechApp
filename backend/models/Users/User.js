@@ -54,11 +54,20 @@ const userSchema = new mongoose.Schema(
         },
 
         // 🔹 Reactivation fields
-        reactivateOTP: {
+        reactivateOtp: {
             type: String,
             default: null,
         },
-        otpExpires: {
+        reactivateOtpExpires: {
+            type: Date,
+            default: null,
+        },
+        // 🔹 Restore fields
+        restoreOtp: {
+            type: String,
+            default: null,
+        },
+        restoreOtpExpires: {
             type: Date,
             default: null,
         },

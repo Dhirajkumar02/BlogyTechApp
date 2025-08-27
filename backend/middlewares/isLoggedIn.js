@@ -10,7 +10,7 @@ const isLoggedIn = (allowInactive = false) => {
             if (!authHeader || !authHeader.startsWith("Bearer ")) {
                 return res.status(401).json({
                     status: "failed",
-                    message: "No token provided. Please log in again.",
+                    message: "No token provided. Please provide the token.",
                 });
             }
 
@@ -33,7 +33,7 @@ const isLoggedIn = (allowInactive = false) => {
                     message:
                         err.name === "TokenExpiredError"
                             ? "Session expired. Please log in again."
-                            : "Invalid token. Please log in again.",
+                            : "Invalid token. Please provide valid token.",
                 });
             }
 

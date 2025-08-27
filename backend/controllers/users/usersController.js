@@ -112,7 +112,7 @@ exports.login = asyncHandler(async (req, res) => {
     // Respond with JWT token
     return res.json({
         status: "success",
-        message: "Login successful",
+        message: "Logged in successfully",
         user: {
             _id: user._id,
             username: user.username,
@@ -121,6 +121,32 @@ exports.login = asyncHandler(async (req, res) => {
             token: generateToken(user), // JWT token
         },
     });
+});
+
+//---------------------------------------------------------
+// @desc    Logout user
+// @route   POST /api/v1/users/logout
+// @access  Private
+//---------------------------------------------------------
+exports.logout = asyncHandler(async (req, res) => {
+    try {
+        // If you are using cookies then clear it
+        res.clearCookie("jwtToken", {
+            httpOnly: true,
+            secure: process.env.NODE_ENV === "production",
+            sameSite: "strict",
+        });
+
+        return res.status(200).json({
+            status: "success",
+            message: "Logged out successfully",
+        });
+    } catch (error) {
+        return res.status(500).json({
+            status: "failed",
+            message: "Logout failed. Please try again.",
+        });
+    }
 });
 
 //---------------------------------------------------------
@@ -690,101 +716,165 @@ exports.deleteAccount = asyncHandler(async (req, res) => {
 });
 
 //---------------------------------------------------------------
-// @desc    Request OTP for Reactivate / Restore
+// @desc    Request OTP for Reactivate or Restore Account
 // @route   POST /api/v1/users/request-otp
 // @access  Public
 //---------------------------------------------------------------
 exports.requestOtp = asyncHandler(async (req, res) => {
-    const email = (req.body.email || "").toLowerCase();
+    const { email } = req.body;
 
-    // Find user (active or deleted)
-    const user = await User.findOne({ email });
-    if (!user) {
-        return res.status(404).json({
-            status: "failed",
-            message: "User not found",
-        });
+    if (!email) {
+        return res
+            .status(400)
+            .json({ status: "failed", message: "Email is required" });
     }
 
+    // It will find deleted user also
+    const user = await User.findOne({ email }).setOptions({ skipDeleted: true });
+    if (!user) {
+        return res
+            .status(404)
+            .json({ status: "failed", message: "User not found" });
+    }
+
+    // Account already active & not deleted
     if (user.isActive && !user.isDeleted) {
-        return res.status(400).json({
-            status: "failed",
-            message: "Account is already active",
-        });
+        return res
+            .status(400)
+            .json({ status: "failed", message: "Account is already active" });
     }
 
     // Generate OTP
-    const otp = generateOTP(); // utils/generateOTP.js
-    user.reactivateOTP = otp;
-    user.otpExpires = Date.now() + 10 * 60 * 1000; // 10 min
-    await user.save();
+    const otp = generateOTP();
 
-    // Send email
     if (user.isDeleted) {
-        await sendAccountRestoreEmail(user.email, otp); // deleted → restore
-    } else {
-        await sendAccountReactivationEmail(user.email, otp); // inactive → reactivate
-    }
+        // Restore flow
+        user.restoreOtp = otp;
+        user.restoreOtpExpires = Date.now() + 10 * 60 * 1000; // 10 min expiry
+        await user.save();
 
-    return res.json({
-        status: "success",
-        message: "OTP sent to your registered email",
-    });
+        // Send OTP email
+        await sendAccountRestoreEmail(user.email, otp);
+
+        return res.json({
+            status: "success",
+            message: "OTP sent to your registered email for restoring account",
+        });
+    } else if (!user.isActive) {
+        // Reactivate flow
+        user.reactivateOtp = otp;
+        user.reactivateOtpExpires = Date.now() + 10 * 60 * 1000; // 10 min expiry
+        await user.save();
+
+        // Send OTP email
+        await sendAccountReactivationEmail(user.email, otp);
+
+        return res.json({
+            status: "success",
+            message: "OTP sent to your registered email for reactivating account",
+        });
+    }
 });
 
 //---------------------------------------------------------------
-// @desc    Verify OTP & Reactivate / Restore
+// @desc    Verify OTP & Reactivate or Restore Account
 // @route   POST /api/v1/users/verify-otp
 // @access  Public
 //---------------------------------------------------------------
 exports.verifyOtp = asyncHandler(async (req, res) => {
     const { email, otp } = req.body;
-    const emailLower = (email || "").toLowerCase();
 
-    const user = await User.findOne({ email: emailLower });
+    if (!email || !otp) {
+        return res
+            .status(400)
+            .json({ status: "failed", message: "Email and OTP are required" });
+    }
+
+    const user = await User.findOne({ email }).setOptions({ skipDeleted: true });
     if (!user) {
-        return res.status(404).json({
-            status: "failed",
-            message: "User not found",
-        });
+        return res
+            .status(404)
+            .json({ status: "failed", message: "User not found" });
     }
 
-    if (!user.reactivateOTP || !user.otpExpires) {
-        return res.status(400).json({
-            status: "failed",
-            message: "OTP request not found! Please request OTP first.",
-        });
-    }
-
-    if (Date.now() > user.otpExpires) {
-        return res.status(400).json({
-            status: "failed",
-            message: "OTP expired. Please request a new one.",
-        });
-    }
-
-    if (otp !== user.reactivateOTP) {
-        return res.status(400).json({
-            status: "failed",
-            message: "Invalid OTP",
-        });
-    }
-
-    // Activate / Restore Account
-    user.isActive = true;
+    // Deleted account - Restore flow
     if (user.isDeleted) {
+        if (!user.restoreOtp || !user.restoreOtpExpires) {
+            return res
+                .status(400)
+                .json({
+                    status: "failed",
+                    message: "OTP request not found. Please request OTP again.",
+                });
+        }
+
+        if (Date.now() > user.restoreOtpExpires) {
+            return res
+                .status(400)
+                .json({
+                    status: "failed",
+                    message: "OTP expired. Please request a new OTP.",
+                });
+        }
+
+        if (otp !== user.restoreOtp) {
+            return res.status(400).json({ status: "failed", message: "Invalid OTP" });
+        }
+
+        // Restore account
         user.isDeleted = false;
+        user.isActive = true;
         user.deletedAt = null;
+        user.restoreOtp = undefined;
+        user.restoreOtpExpires = undefined;
+        await user.save();
+
+        return res.json({
+            status: "success",
+            message:
+                "Your account has been restored successfully. You can now log in.",
+        });
     }
 
-    user.reactivateOTP = undefined;
-    user.otpExpires = undefined;
-    await user.save();
+    // Inactive account - Reactivate flow
+    if (!user.isActive) {
+        if (!user.reactivateOtp || !user.reactivateOtpExpires) {
+            return res
+                .status(400)
+                .json({
+                    status: "failed",
+                    message: "OTP request not found. Please request OTP again.",
+                });
+        }
 
-    return res.json({
-        status: "success",
-        message: user.isDeleted
-            ? "Account restored successfully. You can now log in."
-            : "Account reactivated successfully. You can now log in.",
-    });
+        if (Date.now() > user.reactivateOtpExpires) {
+            return res
+                .status(400)
+                .json({
+                    status: "failed",
+                    message: "OTP expired. Please request a new OTP.",
+                });
+        }
+
+        if (otp !== user.reactivateOtp) {
+            return res.status(400).json({ status: "failed", message: "Invalid OTP" });
+        }
+
+        // Reactivate account
+        user.isActive = true;
+        user.reactivateOtp = undefined;
+        user.reactivateOtpExpires = undefined;
+        await user.save();
+
+        return res.json({
+            status: "success",
+            message:
+                "Your account has been reactivated successfully. You can now log in.",
+        });
+    }
+
+    // Fallback if account already active
+    return res
+        .status(400)
+        .json({ status: "failed", message: "Account is already active" });
 });

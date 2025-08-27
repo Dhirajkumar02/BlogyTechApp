@@ -27,6 +27,7 @@ const {
     verifyRestoreAccount,
     requestOtp,
     verifyOtp,
+    logout,
 } = require("../../controllers/users/usersController");
 const isLoggedIn = require("../../middlewares/isLoggedIn");
 
@@ -42,6 +43,8 @@ usersRouter.post("/register", register);
 // Login user (Public)
 usersRouter.post("/login", login);
 
+// Logout user route(private)
+usersRouter.post("/logout", isLoggedIn(), logout)
 // Forgot password (Public)
 usersRouter.post("/forgot-password", forgotPassword);
 
