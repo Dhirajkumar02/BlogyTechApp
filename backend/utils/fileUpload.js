@@ -3,7 +3,7 @@ const { CloudinaryStorage } = require("multer-storage-cloudinary");
 const multer = require("multer");
 require("dotenv").config();
 
-// Configure Cloudinary
+// Cloudinary config
 cloudinary.config({
     cloud_name: process.env.CLOUDINARY_CLOUD_NAME,
     api_key: process.env.CLOUDINARY_API_KEY,
@@ -11,17 +11,17 @@ cloudinary.config({
     verbose: true,
 });
 
-// Storage setup
+// Cloudinary Storage
 const storage = new CloudinaryStorage({
     cloudinary,
     params: {
-        folder: "blogytech", // Folder ka naam
-        allowedFormats: ["jpg", "png", "jpeg", "gif"],
+        folder: "blogytech", // Cloudinary Folder Name
+        allowed_formats: ["jpg", "jpeg", "png", "gif"],
         transformation: [{ width: 500, height: 500, crop: "limit" }],
     },
 });
 
-// Multer middleware
+// Multer instance
 const upload = multer({ storage });
 
 module.exports = upload;

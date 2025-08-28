@@ -13,7 +13,7 @@ exports.createCategory = asyncHandler(async (req, resp, next) => {
     }
     const category = await Category.create({
         name: name,
-        author: req?.userAuth?._id,
+        author: req?.userAuth?.id,
     });
     resp.json({
         status: "success",
