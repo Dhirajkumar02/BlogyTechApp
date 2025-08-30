@@ -2,6 +2,7 @@ const asyncHandler = require("express-async-handler");
 const Post = require("../../models/Posts/Post");
 const User = require("../../models/Users/User");
 const Category = require("../../models/Categories/Category");
+const mongoose = require("mongoose");
 
 //--------------------------------------------------------
 //@desc Create a new post
@@ -10,53 +11,47 @@ const Category = require("../../models/Categories/Category");
 //--------------------------------------------------------
 exports.createPost = asyncHandler(async (req, res) => {
     const { title, content, categoryId } = req.body;
+    const userId = req.userAuth?.id;
 
-    // Check for duplicate post title
-    const postFound = await Post.findOne({ title });
-    if (postFound) {
-        res.status(400);
-        throw new Error("Post with this title already exists");
-    }
-
-    // Validate required fields
     if (!title || !content) {
-        return res.status(400).json({
-            status: "fail",
-            message: "Title and content are required to create a post.",
-        });
+        return res
+            .status(400)
+            .json({ status: "failed", message: "Title and content are required." });
     }
 
-    // Validate if image is uploaded (Cloudinary)
-    if (!req.file || !req.file.path) {
-        res.status(400);
-        throw new Error("Image is required");
+    if (!req.files?.media || req.files.media.length === 0) {
+        return res
+            .status(400)
+            .json({
+                status: "failed",
+                message: "At least one media file is required.",
+            });
     }
 
-    // Create new post document
+    // Prepare media array
+    const mediaArray = req.files.media.map((file) => ({
+        url: file.path,
+        type: file.mimetype.startsWith("image")
+            ? "photo"
+            : file.mimetype.startsWith("video")
+                ? "video"
+                : "audio",
+    }));
+
     const post = await Post.create({
         title,
         content,
         category: categoryId,
-        author: req.userAuth.id || "Anonymous", // default author
-        image: req.file.path, // store Cloudinary URL
+        author: userId,
+        media: mediaArray,
     });
 
-    // Add post reference to user's posts array
-    await User.findByIdAndUpdate(req.userAuth.id, {
-        $push: { posts: post.id },
-    });
+    await User.findByIdAndUpdate(userId, { $push: { posts: post._id } });
+    await Category.findByIdAndUpdate(categoryId, { $push: { posts: post._id } });
 
-    // Add post reference to category's posts array
-    await Category.findByIdAndUpdate(categoryId, {
-        $push: { posts: post.id },
-    });
-
-    // Send response
-    res.status(201).json({
-        status: "success",
-        message: "Post created successfully",
-        post,
-    });
+    res
+        .status(201)
+        .json({ status: "success", message: "Post created successfully.", post });
 });
 
 //---------------------------------------------------------
@@ -89,6 +84,7 @@ exports.getAllPosts = asyncHandler(async (req, res) => {
         return res.status(200).json({
             status: "success",
             message: "No posts found yet. Be the first to create one!",
+            posts: [],
         });
     }
 
@@ -159,7 +155,6 @@ exports.updatePost = asyncHandler(async (req, res) => {
     res.status(200).json({
         status: "success",
         message: "Post updated successfully!",
-        post: updatedPost,
     });
 });
 
@@ -219,7 +214,6 @@ exports.likePost = asyncHandler(async (req, res) => {
     res.status(200).json({
         status: "success",
         message: "Post liked successfully!",
-        post: updatedPost,
     });
 });
 
@@ -255,7 +249,6 @@ exports.dislikePost = asyncHandler(async (req, res) => {
     res.status(200).json({
         status: "success",
         message: isDisliked ? "Dislike removed" : "Post disliked successfully",
-        post: updatedPost,
     });
 });
 
@@ -284,7 +277,6 @@ exports.clapPost = asyncHandler(async (req, res) => {
     res.status(200).json({
         status: "success",
         message: "👏 Post clapped successfully!",
-        post,
     });
 });
 
@@ -336,6 +328,5 @@ exports.schedulePost = asyncHandler(async (req, res) => {
     res.status(200).json({
         status: "success",
         message: "Post scheduled successfully ✅",
-        post,
     });
 });

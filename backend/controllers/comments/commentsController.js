@@ -1,135 +1,179 @@
 const asyncHandler = require("express-async-handler");
+const mongoose = require("mongoose");
 const Post = require("../../models/Posts/Post");
 const Comment = require("../../models/Comments/Comment");
 
-//@desc Create a New Comment
-//@route POST /api/v1/comments/:postId
-//@access private
-exports.createComment = asyncHandler(async (req, resp) => {
-    const { message } = req.body;
-    const postId = req.params.postId;
+// ✅ Helper: check if the given string is a valid MongoDB ObjectId
+const isValidObjectId = (id) => mongoose.Types.ObjectId.isValid(id);
 
+// ✅ Custom error helper to throw structured errors
+const throwError = (message, statusCode = 400, status = "fail") => {
+    const err = new Error(message);
+    err.statusCode = statusCode;
+    err.status = status;
+    throw err; // handled by globalErrorHandler.js
+};
+
+/* =========================================================
+   CREATE COMMENT
+   Route:   POST /api/v1/comments/:postId
+   Access:  Private (only logged-in users)
+   ========================================================= */
+exports.createComment = asyncHandler(async (req, res) => {
+    const { message } = req.body;
+    const { postId } = req.params;
+
+    // 1. Validate input
+    if (!message) throwError("Comment message is required.", 400);
+    if (!isValidObjectId(postId)) throwError("Invalid postId format.", 400);
+
+    // 2. Ensure the post exists
+    const post = await Post.findById(postId);
+    if (!post) throwError("Post not found with the given ID.", 404);
+
+    // 3. Create comment
     const comment = await Comment.create({
         message,
-        author: req?.userAuth?._id,
+        author: req?.userAuth?.id, // userAuth is set in authentication middleware
         postId,
     });
 
-    await Post.findByIdAndUpdate(
-        postId,
-        { $push: { comments: comment._id } },
-        { new: true }
-    );
+    // 4. Push comment reference into the post
+    await Post.findByIdAndUpdate(postId, { $push: { comments: comment._id } });
 
-    resp.status(201).json({
-        status: "success",
-        message: "Comment successfully created!",
-        comment,
+    // 5. Send response
+    res.status(201).json({
+        status: " ✅ success",
+        message: "Your comment has been added successfully.",
+        data: comment,
     });
 });
 
-//@desc Update a Comment
-//@route PUT /api/v1/comments/:commentId
-//@access private
-exports.updateComment = asyncHandler(async (req, resp) => {
+/* =========================================================
+   UPDATE COMMENT
+   Route:   PUT /api/v1/comments/:commentId
+   Access:  Private (only the author can update their comment)
+   ========================================================= */
+exports.updateComment = asyncHandler(async (req, res) => {
     const { commentId } = req.params;
     const { message } = req.body;
 
-    // Find the comment
+    // 1. Validate commentId
+    if (!isValidObjectId(commentId)) throwError("Invalid commentId format.", 400);
+
+    // 2. Find comment
     const comment = await Comment.findById(commentId);
+    if (!comment) throwError("Comment not found with the given ID.", 404);
 
-    // Check if the comment exists
-    if (!comment) {
-        return resp.status(404).json({ status: "failed", message: "Comment not found" });
+    // 3. Check ownership (only comment author can update)
+    if (comment.author.toString() !== req.userAuth.id.toString()) {
+        throwError("You are not authorized to update this comment.", 403);
     }
 
-    // Check if the logged-in user is the owner
-    if (comment.author.toString() !== req.userAuth._id.toString()) {
-        return resp.status(403).json({ status: "failed", message: "Unauthorized to update this comment" });
-    }
-
-    // Update and save
-    comment.message = message;
+    // 4. Update and save
+    comment.message = message || comment.message;
     await comment.save();
 
-    resp.status(200).json({
-        status: "success",
-        message: "Comment updated successfully!",
-        comment,
+    // 5. Send response
+    res.status(200).json({
+        status: "✅ success",
+        message: "Your comment has been updated successfully.",
+        data: comment,
     });
 });
 
-//@desc Delete a Comment
-//@route DELETE /api/v1/comments/:commentId
-//@access private
-exports.deleteComment = asyncHandler(async (req, resp) => {
+/* =========================================================
+   DELETE COMMENT
+   Route:   DELETE /api/v1/comments/:commentId
+   Access:  Private (only author OR post owner can delete)
+   ========================================================= */
+exports.deleteComment = asyncHandler(async (req, res) => {
     const { commentId } = req.params;
 
-    // Find the comment
+    // 1. Validate commentId
+    if (!isValidObjectId(commentId)) throwError("Invalid commentId format.", 400);
+
+    // 2. Find the comment
     const comment = await Comment.findById(commentId);
-    if (!comment) {
-        return resp.status(404).json({ status: "failed", message: "Comment not found" });
-    }
+    if (!comment) throwError("Comment not found with the given ID.", 404);
 
-    // Get the associated post to check if logged-in user is the post owner
+    // 3. Get associated post (to check if user is post owner)
     const post = await Post.findById(comment.postId);
-    if (!post) {
-        return resp.status(404).json({ status: "failed", message: "Associated post not found" });
-    }
+    if (!post) throwError("Associated post not found.", 404);
 
-    const isCommentAuthor = comment.author.toString() === req.userAuth._id.toString();
-    const isPostOwner = post.author.toString() === req.userAuth._id.toString();
+    // 4. Check authorization (comment author OR post owner can delete)
+    const isCommentAuthor =
+        comment.author.toString() === req.userAuth.id.toString();
+    const isPostOwner = post.author.toString() === req.userAuth.id.toString();
 
-    // Allow deletion if user is either the comment author or the post owner
     if (!isCommentAuthor && !isPostOwner) {
-        return resp.status(403).json({
-            status: "failed",
-            message: "You are not authorized to delete this comment",
-        });
+        throwError("You are not authorized to delete this comment.", 403);
     }
 
+    // 5. Delete comment and remove reference from post
     await Comment.findByIdAndDelete(commentId);
-
-    // Remove comment reference from post
     await Post.findByIdAndUpdate(comment.postId, {
         $pull: { comments: comment._id },
     });
 
-    resp.status(200).json({
-        status: "success",
-        message: "Comment deleted successfully!",
+    // 6. Send response
+    res.status(200).json({
+        status: "✅ success",
+        message: "The comment has been deleted successfully.",
     });
 });
 
-//@desc Get all comments for a post
-//@route GET /api/v1/comments/post/:postId
-//@access public
+/* =========================================================
+   GET ALL COMMENTS FOR A POST
+   Route:   GET /api/v1/comments/post/:postId
+   Access:  Public
+   ========================================================= */
 exports.getCommentsForPost = asyncHandler(async (req, res) => {
     const { postId } = req.params;
 
-    const comments = await Comment.find({ postId }).populate("author", "username");
+    // 1. Validate postId
+    if (!isValidObjectId(postId)) throwError("Invalid postId format.", 400);
 
+    // 2. Fetch all comments and populate author username
+    const comments = await Comment.find({ postId }).populate(
+        "author",
+        "username"
+    );
+
+    // 3. Send response
     res.status(200).json({
-        status: "success",
+        status: "✅ success",
         results: comments.length,
-        comments,
+        message:
+            comments.length > 0
+                ? "Comments retrieved successfully."
+                : "No comments found for this post.",
+        data: comments,
     });
 });
 
-//@desc Get single comment
-//@route GET /api/v1/comments/:commentId
-//@access public
+/* =========================================================
+   GET SINGLE COMMENT
+   Route:   GET /api/v1/comments/:commentId
+   Access:  Public
+   ========================================================= */
 exports.getSingleComment = asyncHandler(async (req, res) => {
     const { commentId } = req.params;
 
-    const comment = await Comment.findById(commentId).populate("author", "username");
+    // 1. Validate commentId
+    if (!isValidObjectId(commentId)) throwError("Invalid commentId format.", 400);
 
-    if (!comment) {
-        return res.status(404).json({ status: "failed", message: "Comment not found" });
-    }
+    // 2. Find comment
+    const comment = await Comment.findById(commentId).populate(
+        "author",
+        "username"
+    );
+    if (!comment) throwError("Comment not found with the given ID.", 404);
 
+    // 3. Send response
     res.status(200).json({
-        status: "success",
-        comment,
+        status: "✅ success",
+        message: "Comment retrieved successfully.",
+        data: comment,
     });
 });

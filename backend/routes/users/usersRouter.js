@@ -1,5 +1,5 @@
 const express = require("express");
-const upload = require("../../utils/fileUpload");
+const { upload, checkFileSize, multerErrorHandler } = require("../../utils/fileUpload");
 const {
     register,
     login,
@@ -58,8 +58,11 @@ usersRouter.put(
         { name: "profilePic", maxCount: 1 },
         { name: "coverPhoto", maxCount: 1 },
     ]),
+    checkFileSize,          // ✅ size validation
+    multerErrorHandler,     // ✅ multer error handling
     updateProfile
 );
+
 
 // Change password while logged in (Private)
 usersRouter.put("/change-password", isLoggedIn(), changePassword);

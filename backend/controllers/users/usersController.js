@@ -310,7 +310,7 @@ exports.updateProfile = asyncHandler(async (req, res) => {
     if (!mongoose.isValidObjectId(userId)) {
         return res
             .status(400)
-            .json({ status: "failed", message: "Invalid user ID" });
+            .json({ status: "failed", message: "Invalid user ID." });
     }
 
     const { bio, location } = req.body;
@@ -318,35 +318,75 @@ exports.updateProfile = asyncHandler(async (req, res) => {
     if (!user) {
         return res
             .status(404)
-            .json({ status: "failed", message: "User not found" });
+            .json({ status: "failed", message: "User not found." });
     }
 
     // Prepare update fields
     const updateFields = {};
-    if (typeof bio !== "undefined") updateFields.bio = bio;
-    if (typeof location !== "undefined") updateFields.location = location;
+    if (bio !== undefined) updateFields.bio = bio;
+    if (location !== undefined) updateFields.location = location;
 
-    // Optional file uploads from multer.fields([{ name: 'profilePic' }, { name: 'coverPhoto' }])
-    const newProfilePic = req.files?.profilePic?.[0]?.path;
-    const newCoverPhoto = req.files?.coverPhoto?.[0]?.path;
+    // ✅ PROFILE PIC
+    const newProfilePic = req.files?.profilePic?.[0];
+    if (newProfilePic) {
+        if (!newProfilePic.mimetype.startsWith("image")) {
+            return res
+                .status(400)
+                .json({
+                    status: "failed",
+                    message: "Profile picture must be an image.",
+                });
+        }
 
-    // If new images uploaded, optionally cleanup old ones on Cloudinary
-    // (Only attempt destroy if your app stores public_id; this snippet assumes URL path usage)
-    try {
-        if (newProfilePic) {
-            // Optional: delete old profile pic from Cloudinary if you store public IDs
-            // Safe-assign new url
-            updateFields.profilePic = newProfilePic;
+        // Read buffer for hash
+        const buffer = fs.readFileSync(newProfilePic.path);
+        const hash = generateImageHash(buffer);
+
+        // Compare with old hash
+        if (user.profilePic?.hash !== hash) {
+            // Upload to cloudinary
+            const uploadRes = await cloudinary.uploader.upload(newProfilePic.path, {
+                folder: "users/profilePics",
+                resource_type: "image",
+            });
+
+            updateFields.profilePic = {
+                url: uploadRes.secure_url,
+                type: "photo",
+                hash,
+            };
         }
-        if (newCoverPhoto) {
-            // Optional: delete old cover photo
-            updateFields.coverPhoto = newCoverPhoto;
-        }
-    } catch (e) {
-        // Cloudinary cleanup should not break the request
-        console.error("Cloudinary cleanup error:", e?.message);
+        fs.unlinkSync(newProfilePic.path); // temp file delete
     }
 
+    // ✅ COVER PHOTO
+    const newCoverPhoto = req.files?.coverPhoto?.[0];
+    if (newCoverPhoto) {
+        if (!newCoverPhoto.mimetype.startsWith("image")) {
+            return res
+                .status(400)
+                .json({ status: "failed", message: "Cover photo must be an image." });
+        }
+
+        const buffer = fs.readFileSync(newCoverPhoto.path);
+        const hash = generateImageHash(buffer);
+
+        if (user.coverPhoto?.hash !== hash) {
+            const uploadRes = await cloudinary.uploader.upload(newCoverPhoto.path, {
+                folder: "users/coverPhotos",
+                resource_type: "image",
+            });
+
+            updateFields.coverPhoto = {
+                url: uploadRes.secure_url,
+                type: "photo",
+                hash,
+            };
+        }
+        fs.unlinkSync(newCoverPhoto.path);
+    }
+
+    // ✅ Update only changed fields
     const updatedUser = await User.findByIdAndUpdate(userId, updateFields, {
         new: true,
         runValidators: true,
@@ -354,9 +394,9 @@ exports.updateProfile = asyncHandler(async (req, res) => {
         "username email role accountLevel profilePic coverPhoto bio location followers following posts createdAt"
     );
 
-    return res.json({
+    res.json({
         status: "success",
-        message: "Profile updated successfully",
+        message: "Profile updated successfully.",
         user: updatedUser,
     });
 });
@@ -800,21 +840,17 @@ exports.verifyOtp = asyncHandler(async (req, res) => {
     // Deleted account - Restore flow
     if (user.isDeleted) {
         if (!user.restoreOtp || !user.restoreOtpExpires) {
-            return res
-                .status(400)
-                .json({
-                    status: "failed",
-                    message: "OTP request not found. Please request OTP again.",
-                });
+            return res.status(400).json({
+                status: "failed",
+                message: "OTP request not found. Please request OTP again.",
+            });
         }
 
         if (Date.now() > user.restoreOtpExpires) {
-            return res
-                .status(400)
-                .json({
-                    status: "failed",
-                    message: "OTP expired. Please request a new OTP.",
-                });
+            return res.status(400).json({
+                status: "failed",
+                message: "OTP expired. Please request a new OTP.",
+            });
         }
 
         if (otp !== user.restoreOtp) {
@@ -839,21 +875,17 @@ exports.verifyOtp = asyncHandler(async (req, res) => {
     // Inactive account - Reactivate flow
     if (!user.isActive) {
         if (!user.reactivateOtp || !user.reactivateOtpExpires) {
-            return res
-                .status(400)
-                .json({
-                    status: "failed",
-                    message: "OTP request not found. Please request OTP again.",
-                });
+            return res.status(400).json({
+                status: "failed",
+                message: "OTP request not found. Please request OTP again.",
+            });
         }
 
         if (Date.now() > user.reactivateOtpExpires) {
-            return res
-                .status(400)
-                .json({
-                    status: "failed",
-                    message: "OTP expired. Please request a new OTP.",
-                });
+            return res.status(400).json({
+                status: "failed",
+                message: "OTP expired. Please request a new OTP.",
+            });
         }
 
         if (otp !== user.reactivateOtp) {

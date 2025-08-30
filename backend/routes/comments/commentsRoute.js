@@ -11,7 +11,7 @@ const isLoggedIn = require("../../middlewares/isLoggedIn");
 const commentsRouter = express.Router();
 
 // Create comment - POST /api/v1/comments/:postId
-commentsRouter.post("/:postId", isLoggedIn, createComment);
+commentsRouter.post("/:postId", isLoggedIn(), createComment);
 
 // Get all comments for a post
 commentsRouter.get("/post/:postId", getCommentsForPost);
@@ -20,9 +20,9 @@ commentsRouter.get("/post/:postId", getCommentsForPost);
 commentsRouter.get("/:commentId", getSingleComment);
 
 // Update comment - PUT /api/v1/comments/:commentId
-commentsRouter.put("/:commentId", isLoggedIn, updateComment);
+commentsRouter.put("/:commentId", isLoggedIn(), updateComment);
 
 // Delete comment - DELETE /api/v1/comments/:commentId
-commentsRouter.delete("/:commentId", isLoggedIn, deleteComment);
+commentsRouter.delete("/:commentId", isLoggedIn(), deleteComment);
 
 module.exports = commentsRouter;

@@ -1,5 +1,5 @@
 const express = require("express");
-const upload = require("../../utils/fileUpload");
+const { upload, checkFileSize, multerErrorHandler } = require("../../utils/fileUpload");
 const {
     createPost,
     getAllPosts,
@@ -21,11 +21,15 @@ const postsRouter = express.Router();
 // Access: Private ✅ (user must be logged in and account verified)
 postsRouter.post(
     "/create-post",
-    isLoggedIn(), // auth check
-    isAccountVerified, // account verification check
-    upload.single("image"), // file upload
+    isLoggedIn(),
+    isAccountVerified,
+    upload.array("media", 5),   // max 5 files per post
+    checkFileSize,              // size validation
+    multerErrorHandler,         // multer error handling
     createPost
 );
+
+
 
 //! Fetch all posts
 // Route: GET /api/v1/posts

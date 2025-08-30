@@ -1,7 +1,6 @@
 const mongoose = require("mongoose");
 const bcrypt = require("bcryptjs");
 const crypto = require("crypto");
-const { type } = require("os");
 
 const DEFAULT_PROFILE_PIC =
     "https://res.cloudinary.com/demo/image/upload/v1691000000/default-profile.png";
@@ -27,7 +26,7 @@ const userSchema = new mongoose.Schema(
         password: {
             type: String,
             required: [true, "Password is required"],
-            select: false, // hide by default
+            select: false,
             minlength: 6,
         },
         role: {
@@ -46,43 +45,27 @@ const userSchema = new mongoose.Schema(
         },
         isActive: {
             type: Boolean,
-            default: true, // It will become false when the user deactivates it
+            default: true,
         },
         isDeleted: {
             type: Boolean,
-            default: false, // If account deleted
-        },
-
-        // 🔹 Reactivation fields
-        reactivateOtp: {
-            type: String,
-            default: null,
-        },
-        reactivateOtpExpires: {
-            type: Date,
-            default: null,
-        },
-        // 🔹 Restore fields
-        restoreOtp: {
-            type: String,
-            default: null,
-        },
-        restoreOtpExpires: {
-            type: Date,
-            default: null,
+            default: false,
         },
         accountLevel: {
             type: String,
             enum: ["bronze", "silver", "gold"],
             default: "bronze",
         },
+        // Profile & Cover Photo (image only)
         profilePic: {
-            type: String,
-            default: DEFAULT_PROFILE_PIC,
+            url: { type: String, default: DEFAULT_PROFILE_PIC },
+            type: { type: String, enum: ["photo"], default: "photo" },
+            hash: { type: String, default: "" }, // ✅ new field to store image hash
         },
         coverPhoto: {
-            type: String,
-            default: DEFAULT_COVER_PHOTO,
+            url: { type: String, default: DEFAULT_COVER_PHOTO },
+            type: { type: String, enum: ["photo"], default: "photo" },
+            hash: { type: String, default: "" }, // ✅ new field to store image hash
         },
         bio: {
             type: String,
@@ -98,7 +81,6 @@ const userSchema = new mongoose.Schema(
             type: String,
             enum: ["male", "female", "prefer not to say", "non-binary"],
         },
-
         // Relationships
         profileViewers: [{ type: mongoose.Schema.Types.ObjectId, ref: "User" }],
         followers: [{ type: mongoose.Schema.Types.ObjectId, ref: "User" }],
@@ -106,12 +88,9 @@ const userSchema = new mongoose.Schema(
         blockedUsers: [{ type: mongoose.Schema.Types.ObjectId, ref: "User" }],
         posts: [{ type: mongoose.Schema.Types.ObjectId, ref: "Post" }],
         likedPosts: [{ type: mongoose.Schema.Types.ObjectId, ref: "Post" }],
-
-        // Password reset fields
+        // Password reset & verification
         passwordResetToken: String,
         passwordResetExpires: Date,
-
-        // Account verification fields
         accountVerificationToken: String,
         accountVerificationExpires: Date,
     },
@@ -122,12 +101,12 @@ const userSchema = new mongoose.Schema(
     }
 );
 
-/* ----------------- Virtuals ----------------- */
+/* Virtuals */
 userSchema.virtual("fullName").get(function () {
-    return this.username; // agar tum firstname/lastname use karoge toh combine kar lena
+    return this.username;
 });
 
-/* ----------------- Custom Static Methods ----------------- */
+/* Custom Static Methods */
 userSchema.statics.softDeleteById = async function (id) {
     return this.findByIdAndUpdate(
         id,
@@ -144,8 +123,7 @@ userSchema.statics.restoreById = async function (id) {
     );
 };
 
-/* ----------------- Middlewares ----------------- */
-// Hash password before saving
+/* Middlewares */
 userSchema.pre("save", async function (next) {
     if (!this.isModified("password")) return next();
     const salt = await bcrypt.genSalt(10);
@@ -154,24 +132,17 @@ userSchema.pre("save", async function (next) {
     next();
 });
 
-// 🔹 Pre middleware for all find queries
 userSchema.pre(/^find/, function (next) {
-    // Agar explicitly skipDeleted option pass kiya hai toh deleted bhi show ho
-    if (this.getOptions().skipDeleted) {
-        return next();
-    }
-    // Warna default me sirf non-deleted
+    if (this.getOptions().skipDeleted) return next();
     this.find({ isDeleted: { $ne: true } });
     next();
 });
 
-/* ----------------- Methods ----------------- */
-// Compare entered password with hashed password
+/* Methods */
 userSchema.methods.isPasswordMatch = async function (enteredPassword) {
     return bcrypt.compare(enteredPassword, this.password);
 };
 
-// Check if password was changed after JWT token was issued
 userSchema.methods.changedPasswordAfter = function (JWTTimestamp) {
     if (this.passwordChangedAt) {
         const changedTimestamp = parseInt(
@@ -183,29 +154,32 @@ userSchema.methods.changedPasswordAfter = function (JWTTimestamp) {
     return false;
 };
 
-// Generate password reset token
 userSchema.methods.generatePasswordResetToken = function () {
     const resetToken = crypto.randomBytes(20).toString("hex");
     this.passwordResetToken = crypto
         .createHash("sha256")
         .update(resetToken)
         .digest("hex");
-    this.passwordResetExpires = Date.now() + 10 * 60 * 1000; // 10 min
+    this.passwordResetExpires = Date.now() + 10 * 60 * 1000;
     return resetToken;
 };
 
-// Generate account verification token
 userSchema.methods.generateAccountVerificationToken = function () {
     const verificationToken = crypto.randomBytes(20).toString("hex");
     this.accountVerificationToken = crypto
         .createHash("sha256")
         .update(verificationToken)
         .digest("hex");
-    this.accountVerificationExpires = Date.now() + 10 * 60 * 1000; // 10 min
+    this.accountVerificationExpires = Date.now() + 10 * 60 * 1000;
     return verificationToken;
 };
 
-// Clear tokens after verification or reset
+/* ----------------- Methods ----------------- */
+// Generate hash for uploaded image
+userSchema.methods.generateImageHash = function (buffer) {
+    return crypto.createHash("sha256").update(buffer).digest("hex");
+};
+
 userSchema.methods.clearTokens = function () {
     this.passwordResetToken = undefined;
     this.passwordResetExpires = undefined;
