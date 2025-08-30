@@ -23,8 +23,7 @@ const storage = new CloudinaryStorage({
 
         if (file.mimetype.startsWith("image")) resourceType = "image";
         else if (file.mimetype.startsWith("video")) resourceType = "video";
-        else if (file.mimetype.startsWith("audio"))
-            resourceType = "video"; // Cloudinary treats audio as video
+        else if (file.mimetype.startsWith("audio")) resourceType = "video";
         else resourceType = "raw";
 
         return { folder: "blogytech", resource_type: resourceType };
@@ -55,7 +54,6 @@ const fileFilter = (req, file, cb) => {
             ...allowedTypes.docs,
         ].includes(mimetype)
     ) {
-        // Per-type size limit
         let maxSize = 0;
         if (allowedTypes.images.includes(mimetype)) maxSize = 10 * 1024 * 1024;
         else if (allowedTypes.videos.includes(mimetype)) maxSize = 50 * 1024 * 1024;
@@ -85,14 +83,13 @@ const upload = multer({ storage, fileFilter });
 const checkFileSize = (req, res, next) => {
     const allFiles = [];
 
-    if (req.file) allFiles.push(req.file); // single file
+    if (req.file) allFiles.push(req.file);
     if (req.files) {
-        if (Array.isArray(req.files)) allFiles.push(...req.files); // multer.array()
+        if (Array.isArray(req.files)) allFiles.push(...req.files);
         else
-            Object.values(req.files).forEach((fileOrArray) => {
-                if (Array.isArray(fileOrArray)) allFiles.push(...fileOrArray);
-                else allFiles.push(fileOrArray);
-            });
+            Object.values(req.files).forEach((f) =>
+                Array.isArray(f) ? allFiles.push(...f) : allFiles.push(f)
+            );
     }
 
     for (let file of allFiles) {
@@ -130,4 +127,38 @@ const multerErrorHandler = (err, req, res, next) => {
     next(err);
 };
 
-module.exports = { upload, checkFileSize, multerErrorHandler };
+// -------------------
+// 🔑 Helper: Upload buffer to Cloudinary
+// -------------------
+const uploadToCloudinary = (buffer, folder) => {
+    return new Promise((resolve, reject) => {
+        const uploadStream = cloudinary.uploader.upload_stream(
+            { folder, resource_type: "image" },
+            (error, result) => {
+                if (error) return reject(error);
+                resolve(result);
+            }
+        );
+        uploadStream.end(buffer);
+    });
+};
+
+// -------------------
+// 🔑 Helper: Delete file from Cloudinary by public_id
+// -------------------
+const deleteFromCloudinary = (publicId) => {
+    return new Promise((resolve, reject) => {
+        cloudinary.uploader.destroy(publicId, (error, result) => {
+            if (error) return reject(error);
+            resolve(result);
+        });
+    });
+};
+
+module.exports = {
+    upload,
+    checkFileSize,
+    multerErrorHandler,
+    uploadToCloudinary,
+    deleteFromCloudinary,
+};

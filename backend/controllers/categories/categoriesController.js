@@ -16,7 +16,7 @@ exports.createCategory = asyncHandler(async (req, resp, next) => {
         author: req?.userAuth?.id,
     });
     resp.json({
-        status: "success",
+        status: "✅ success",
         message: "Category created successfully",
         category,
     });
@@ -31,7 +31,7 @@ exports.getAllCategories = asyncHandler(async (req, resp) => {
         model: "Post",
     });
     resp.status(201).json({
-        status: "success",
+        status: "✅ success",
         message: "All categories successfully fetched",
         allCategories,
     });
@@ -44,7 +44,7 @@ exports.deleteCategory = asyncHandler(async (req, resp) => {
     const catId = req.params.id;
     await Category.findByIdAndDelete(catId);
     resp.status(201).json({
-        status: "success",
+        status: "✅ success",
         message: "Category deleted successfully",
     });
 });
@@ -61,7 +61,7 @@ exports.updateCategory = asyncHandler(async (req, resp) => {
         { new: true, runValidators: true }
     );
     resp.status(201).json({
-        status: "success",
+        status: "✅ success",
         message: "Category Updated successfully",
         updatedCategory,
     });

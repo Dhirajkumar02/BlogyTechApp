@@ -56,17 +56,15 @@ const userSchema = new mongoose.Schema(
             enum: ["bronze", "silver", "gold"],
             default: "bronze",
         },
-        // Profile & Cover Photo (image only)
         profilePic: {
             url: { type: String, default: DEFAULT_PROFILE_PIC },
-            type: { type: String, enum: ["photo"], default: "photo" },
-            hash: { type: String, default: "" }, // ✅ new field to store image hash
+            public_id: { type: String, default: "" },
         },
         coverPhoto: {
             url: { type: String, default: DEFAULT_COVER_PHOTO },
-            type: { type: String, enum: ["photo"], default: "photo" },
-            hash: { type: String, default: "" }, // ✅ new field to store image hash
+            public_id: { type: String, default: "" },
         },
+
         bio: {
             type: String,
             maxlength: 250,
@@ -172,12 +170,6 @@ userSchema.methods.generateAccountVerificationToken = function () {
         .digest("hex");
     this.accountVerificationExpires = Date.now() + 10 * 60 * 1000;
     return verificationToken;
-};
-
-/* ----------------- Methods ----------------- */
-// Generate hash for uploaded image
-userSchema.methods.generateImageHash = function (buffer) {
-    return crypto.createHash("sha256").update(buffer).digest("hex");
 };
 
 userSchema.methods.clearTokens = function () {

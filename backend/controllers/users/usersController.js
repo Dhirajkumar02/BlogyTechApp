@@ -13,6 +13,10 @@ const {
     sendAccountRestoreEmail,
 } = require("../../utils/emailService");
 const generateOTP = require("../../utils/generateOTP");
+const {
+    uploadToCloudinary,
+    deleteFromCloudinary,
+} = require("../../utils/fileUpload");
 
 /* =========================================
                 AUTHENTICATION
@@ -48,7 +52,7 @@ exports.register = asyncHandler(async (req, res) => {
     const user = await User.create({ username, email, password });
 
     return res.status(201).json({
-        status: "success",
+        status: "✅ success",
         message: "User registered successfully",
         user: {
             _id: user._id,
@@ -111,7 +115,7 @@ exports.login = asyncHandler(async (req, res) => {
 
     // Respond with JWT token
     return res.json({
-        status: "success",
+        status: "✅ success",
         message: "Logged in successfully",
         user: {
             _id: user._id,
@@ -138,7 +142,7 @@ exports.logout = asyncHandler(async (req, res) => {
         });
 
         return res.status(200).json({
-            status: "success",
+            status: "✅ success",
             message: "Logged out successfully",
         });
     } catch (error) {
@@ -194,7 +198,7 @@ exports.changePassword = asyncHandler(async (req, res) => {
     await user.save();
 
     return res.json({
-        status: "success",
+        status: "✅ success",
         message: "Password updated successfully. Please login again.",
     });
 });
@@ -227,7 +231,7 @@ exports.forgotPassword = asyncHandler(async (req, res) => {
     try {
         await sendResetPasswordEmail(user.email, resetToken);
         return res.json({
-            status: "success",
+            status: "✅ success",
             message: "Password reset link sent to email",
         });
     } catch (error) {
@@ -272,7 +276,7 @@ exports.resetPassword = asyncHandler(async (req, res) => {
     await user.save();
 
     return res.json({
-        status: "success",
+        status: "✅ success",
         message: "Password has been reset successfully. Please login again.",
     });
 });
@@ -296,7 +300,7 @@ exports.getProfile = asyncHandler(async (req, res) => {
             .json({ status: "failed", message: "User not found" });
     }
 
-    return res.status(200).json({ status: "success", data: user });
+    return res.status(200).json({ status: "✅ success", data: user });
 });
 
 //---------------------------------------------------------
@@ -313,7 +317,6 @@ exports.updateProfile = asyncHandler(async (req, res) => {
             .json({ status: "failed", message: "Invalid user ID." });
     }
 
-    const { bio, location } = req.body;
     const user = await User.findById(userId);
     if (!user) {
         return res
@@ -321,72 +324,60 @@ exports.updateProfile = asyncHandler(async (req, res) => {
             .json({ status: "failed", message: "User not found." });
     }
 
-    // Prepare update fields
+    const { bio, location } = req.body;
     const updateFields = {};
     if (bio !== undefined) updateFields.bio = bio;
     if (location !== undefined) updateFields.location = location;
 
-    // ✅ PROFILE PIC
+    // ---------------- Profile Picture ----------------
     const newProfilePic = req.files?.profilePic?.[0];
-    if (newProfilePic) {
+    if (newProfilePic && newProfilePic.buffer && newProfilePic.size > 0) {
         if (!newProfilePic.mimetype.startsWith("image")) {
-            return res
-                .status(400)
-                .json({
-                    status: "failed",
-                    message: "Profile picture must be an image.",
-                });
-        }
-
-        // Read buffer for hash
-        const buffer = fs.readFileSync(newProfilePic.path);
-        const hash = generateImageHash(buffer);
-
-        // Compare with old hash
-        if (user.profilePic?.hash !== hash) {
-            // Upload to cloudinary
-            const uploadRes = await cloudinary.uploader.upload(newProfilePic.path, {
-                folder: "users/profilePics",
-                resource_type: "image",
+            return res.status(400).json({
+                status: "failed",
+                message: "Profile picture must be an image.",
             });
-
-            updateFields.profilePic = {
-                url: uploadRes.secure_url,
-                type: "photo",
-                hash,
-            };
         }
-        fs.unlinkSync(newProfilePic.path); // temp file delete
+
+        if (user.profilePic?.public_id) {
+            await deleteFromCloudinary(user.profilePic.public_id);
+        }
+
+        const result = await uploadToCloudinary(
+            newProfilePic.buffer,
+            "users/profilePics"
+        );
+        updateFields.profilePic = {
+            url: result.secure_url,
+            public_id: result.public_id,
+        };
     }
 
-    // ✅ COVER PHOTO
+    // ---------------- Cover Photo ----------------
     const newCoverPhoto = req.files?.coverPhoto?.[0];
-    if (newCoverPhoto) {
+    if (newCoverPhoto && newCoverPhoto.buffer && newCoverPhoto.size > 0) {
         if (!newCoverPhoto.mimetype.startsWith("image")) {
-            return res
-                .status(400)
-                .json({ status: "failed", message: "Cover photo must be an image." });
-        }
-
-        const buffer = fs.readFileSync(newCoverPhoto.path);
-        const hash = generateImageHash(buffer);
-
-        if (user.coverPhoto?.hash !== hash) {
-            const uploadRes = await cloudinary.uploader.upload(newCoverPhoto.path, {
-                folder: "users/coverPhotos",
-                resource_type: "image",
+            return res.status(400).json({
+                status: "failed",
+                message: "Cover photo must be an image.",
             });
-
-            updateFields.coverPhoto = {
-                url: uploadRes.secure_url,
-                type: "photo",
-                hash,
-            };
         }
-        fs.unlinkSync(newCoverPhoto.path);
+
+        if (user.coverPhoto?.public_id) {
+            await deleteFromCloudinary(user.coverPhoto.public_id);
+        }
+
+        const result = await uploadToCloudinary(
+            newCoverPhoto.buffer,
+            "users/coverPhotos"
+        );
+        updateFields.coverPhoto = {
+            url: result.secure_url,
+            public_id: result.public_id,
+        };
     }
 
-    // ✅ Update only changed fields
+    // ---------------- Update User ----------------
     const updatedUser = await User.findByIdAndUpdate(userId, updateFields, {
         new: true,
         runValidators: true,
@@ -395,7 +386,7 @@ exports.updateProfile = asyncHandler(async (req, res) => {
     );
 
     res.json({
-        status: "success",
+        status: "✅ success",
         message: "Profile updated successfully.",
         user: updatedUser,
     });
@@ -439,7 +430,10 @@ exports.followingUser = asyncHandler(async (req, res) => {
         $addToSet: { followers: currentUserId },
     });
 
-    return res.json({ status: "success", message: "Followed user successfully" });
+    return res.json({
+        status: "✅ success",
+        message: "Followed user successfully",
+    });
 });
 
 //---------------------------------------------------------------
@@ -470,7 +464,7 @@ exports.unFollowingUser = asyncHandler(async (req, res) => {
     });
 
     return res.json({
-        status: "success",
+        status: "✅ success",
         message: "Unfollowed user successfully",
     });
 });
@@ -512,7 +506,10 @@ exports.blockUser = asyncHandler(async (req, res) => {
         $addToSet: { blockedUsers: userIdToBlock },
     });
 
-    return res.json({ status: "success", message: "User blocked successfully" });
+    return res.json({
+        status: "✅ success",
+        message: "User blocked successfully",
+    });
 });
 
 //---------------------------------------------------------------
@@ -535,7 +532,7 @@ exports.unblockUser = asyncHandler(async (req, res) => {
     });
 
     return res.json({
-        status: "success",
+        status: "✅ success",
         message: "User unblocked successfully",
     });
 });
@@ -577,7 +574,7 @@ exports.viewOtherProfile = asyncHandler(async (req, res) => {
     }
 
     return res.json({
-        status: "success",
+        status: "✅ success",
         message: "Profile viewed successfully",
         profile: userProfile,
     });
@@ -607,7 +604,7 @@ exports.accountVerificationEmail = asyncHandler(async (req, res) => {
     try {
         await sendAccountVerificationEmail(currentUser.email, verifyToken);
         return res.json({
-            status: "success",
+            status: "✅ success",
             message: `Verification email sent to ${currentUser.email}`,
         });
     } catch (error) {
@@ -649,7 +646,7 @@ exports.verifyAccount = asyncHandler(async (req, res) => {
     await user.save();
 
     return res.json({
-        status: "success",
+        status: "✅ success",
         message: "Your account verified successfully.",
     });
 });
@@ -678,56 +675,10 @@ exports.deactivateAccount = asyncHandler(async (req, res) => {
     await user.save();
 
     return res.json({
-        status: "success",
+        status: "✅ success",
         message: "Your account is deactivated successfully.",
     });
 });
-
-//---------------------------------------------------------------
-// @desc    Reactivate Account
-// @route   PUT /api/v1/users/reactivate
-// @access  Private (isLoggedIn)
-//---------------------------------------------------------------
-// exports.reactivateAccount = asyncHandler(async (req, res) => {
-//     const user = await User.findById(req.userAuth?.id);
-//     if (!user) {
-//         return res
-//             .status(404)
-//             .json({ status: "failed", message: "User not found" });
-//     }
-
-//     // Already active
-//     if (user.isActive) {
-//         return res
-//             .status(400)
-//             .json({ status: "failed", message: "Account already active" });
-//     }
-
-//     // If soft-deleted, optional restore window (30 days)
-//     if (user.isDeleted) {
-//         const deletedAt = user.deletedAt || user.updatedAt || new Date();
-//         const daysSinceDeleted =
-//             (Date.now() - new Date(deletedAt).getTime()) / (1000 * 60 * 60 * 24);
-
-//         if (daysSinceDeleted > 30) {
-//             return res.status(403).json({
-//                 status: "failed",
-//                 message:
-//                     "This account was deleted more than 30 days ago. Please contact support.",
-//             });
-//         }
-
-//         user.isDeleted = false;
-//     }
-
-//     user.isActive = true;
-//     await user.save();
-
-//     return res.json({
-//         status: "success",
-//         message: "Account reactivated successfully",
-//     });
-// });
 
 //---------------------------------------------------------------
 // @desc    Delete Account (soft delete)
@@ -749,7 +700,7 @@ exports.deleteAccount = asyncHandler(async (req, res) => {
     await user.save();
 
     return res.json({
-        status: "success",
+        status: "✅ success",
         message:
             "Your account deleted successfully. You can restore it anytime via OTP.",
     });
@@ -797,7 +748,7 @@ exports.requestOtp = asyncHandler(async (req, res) => {
         await sendAccountRestoreEmail(user.email, otp);
 
         return res.json({
-            status: "success",
+            status: "✅ success",
             message: "OTP sent to your registered email for restoring account",
         });
     } else if (!user.isActive) {
@@ -810,7 +761,7 @@ exports.requestOtp = asyncHandler(async (req, res) => {
         await sendAccountReactivationEmail(user.email, otp);
 
         return res.json({
-            status: "success",
+            status: "✅ success",
             message: "OTP sent to your registered email for reactivating account",
         });
     }
@@ -866,7 +817,7 @@ exports.verifyOtp = asyncHandler(async (req, res) => {
         await user.save();
 
         return res.json({
-            status: "success",
+            status: "✅ success",
             message:
                 "Your account has been restored successfully. You can now log in.",
         });
@@ -899,7 +850,7 @@ exports.verifyOtp = asyncHandler(async (req, res) => {
         await user.save();
 
         return res.json({
-            status: "success",
+            status: "✅ success",
             message:
                 "Your account has been reactivated successfully. You can now log in.",
         });

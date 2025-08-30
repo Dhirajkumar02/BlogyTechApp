@@ -19,7 +19,7 @@ exports.createPost = asyncHandler(async (req, res) => {
             .json({ status: "failed", message: "Title and content are required." });
     }
 
-    if (!req.files?.media || req.files.media.length === 0) {
+    if (!req.files || req.files.length === 0) {
         return res
             .status(400)
             .json({
@@ -29,7 +29,7 @@ exports.createPost = asyncHandler(async (req, res) => {
     }
 
     // Prepare media array
-    const mediaArray = req.files.media.map((file) => ({
+    const mediaArray = req.files.map((file) => ({
         url: file.path,
         type: file.mimetype.startsWith("image")
             ? "photo"
@@ -51,7 +51,11 @@ exports.createPost = asyncHandler(async (req, res) => {
 
     res
         .status(201)
-        .json({ status: "success", message: "Post created successfully.", post });
+        .json({
+            status: "✅ success",
+            message: "Post created successfully.",
+            post
+        });
 });
 
 //---------------------------------------------------------
@@ -90,7 +94,7 @@ exports.getAllPosts = asyncHandler(async (req, res) => {
 
     // Return posts
     res.status(200).json({
-        status: "success",
+        status: "✅ success",
         message: "Posts fetched successfully",
         posts,
     });
@@ -115,7 +119,7 @@ exports.getSinglePost = asyncHandler(async (req, res) => {
 
     // Return single post
     res.status(200).json({
-        status: "success",
+        status: "✅ success",
         message: "Post fetched successfully",
         post,
     });
@@ -153,7 +157,7 @@ exports.updatePost = asyncHandler(async (req, res) => {
 
     // Return updated post
     res.status(200).json({
-        status: "success",
+        status: "✅ success",
         message: "Post updated successfully!",
     });
 });
@@ -177,7 +181,7 @@ exports.deletePost = asyncHandler(async (req, res) => {
 
     // Return deleted post (optional)
     res.status(200).json({
-        status: "success",
+        status: "✅ success",
         message: "Post deleted successfully",
         deletedPost,
     });
@@ -212,7 +216,7 @@ exports.likePost = asyncHandler(async (req, res) => {
     ).populate(["author", "category"]);
 
     res.status(200).json({
-        status: "success",
+        status: "✅ success",
         message: "Post liked successfully!",
     });
 });
@@ -247,7 +251,7 @@ exports.dislikePost = asyncHandler(async (req, res) => {
     ).populate(["author", "category"]);
 
     res.status(200).json({
-        status: "success",
+        status: "✅ success",
         message: isDisliked ? "Dislike removed" : "Post disliked successfully",
     });
 });
@@ -275,7 +279,7 @@ exports.clapPost = asyncHandler(async (req, res) => {
     }
 
     res.status(200).json({
-        status: "success",
+        status: "✅ success",
         message: "👏 Post clapped successfully!",
     });
 });
@@ -326,7 +330,7 @@ exports.schedulePost = asyncHandler(async (req, res) => {
     await post.save();
 
     res.status(200).json({
-        status: "success",
-        message: "Post scheduled successfully ✅",
+        status: "✅ success",
+        message: "Post scheduled successfully!",
     });
 });
