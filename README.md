@@ -202,9 +202,9 @@ This project demonstrates my skills in **backend development, API design, authen
 
 **Dhiraj Kumar**
 - 💼 Java Full Stack Developer | MERN Enthusiast
-- 🌐 Portfolio: ![Portfolio](https://dhirajkumar02.github.io/My-Portfolio/)
+- 🌐 Portfolio: https://dhirajkumar02.github.io/My-Portfolio/
 - 📧 Email: dhirajkumarsaah@gmail,com
-- 🔗 LinkedIn: ![LinkedIn](https://www.linkedin.com/in/dhirajkumar02/)
+- 🔗 LinkedIn: https://www.linkedin.com/in/dhirajkumar02/
 
 ## ⭐ If you like this project, don’t forget to star the repo!
 
