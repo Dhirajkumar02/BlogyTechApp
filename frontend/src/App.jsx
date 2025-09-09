@@ -1,16 +1,12 @@
 import { BrowserRouter, Route, Routes } from "react-router-dom";
+import Homepage from "./components/Homepage/Homepage";
+import Login from "./components/Users/Login";
 export default function App() {
-  const HomePage = () => {
-    return <h1>Welcome to Home Page!</h1>
-  };
-  const LoginPage = () => {
-    return <h1>Welcome to Login Page</h1>
-  }
   return (
     <BrowserRouter>
       <Routes>
-        <Route path="/" element={<HomePage />}> </Route>
-        <Route path="/login" element={<LoginPage />}> </Route>
+        <Route path="/" element={<Homepage />}> </Route>
+        <Route path="/login" element={<Login />}> </Route>
       </Routes>
     </BrowserRouter>
   )
